@@ -1,0 +1,187 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,300..900;1,62..125,300..900&family=Martian+Mono:wght@300;400;600&display=swap');
+
+:root{
+  --line-f:#E8402A; --line-r:#3B57C4; --line-c:#00A277; --line-m:#F2A007;
+  --ease:cubic-bezier(.16,.84,.34,1);
+  --rail:1px;
+  --pad:clamp(14px,2.4vw,28px);
+}
+[data-theme="dark"]{
+  --bg:#0A0B0D; --bg-2:#101215; --ink:#F4F6F8; --ink-2:#8B939C; --ink-3:#4A5058;
+  --hair:#22262B; --node-fill:#0A0B0D; --panel:rgba(16,18,21,.86); --shadow:0 0 0 1px #22262B;
+}
+[data-theme="light"]{
+  --bg:#E9EBEA; --bg-2:#F4F5F4; --ink:#14171A; --ink-2:#5C6469; --ink-3:#636A6E;
+  --hair:#C9CECD; --node-fill:#F4F5F4; --panel:rgba(244,245,244,.9); --shadow:0 0 0 1px #C9CECD;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+body{background:var(--bg);color:var(--ink);font-family:'Archivo',system-ui,sans-serif;
+  font-variation-settings:'wdth' 100; transition:background .5s var(--ease),color .5s var(--ease)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+.mono{font-family:'Martian Mono','SFMono-Regular',monospace;font-weight:400}
+.eyebrow{font-family:'Martian Mono',monospace;font-size:9px;font-weight:400;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--ink-3)}
+
+#app{position:fixed;inset:0;display:flex;flex-direction:column}
+.canvas-wrap{position:relative;flex:1;min-height:0}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+
+/* ---------- top nav (index only) ---------- */
+.topnav{display:flex;gap:0;align-items:stretch;background:var(--panel);box-shadow:var(--shadow)}
+.topnav a{padding:9px 14px 8px;font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink-3);border-right:1px solid var(--hair);text-decoration:none}
+.topnav a:last-child{border-right:none}
+.topnav a:hover{color:var(--ink)}
+
+/* ---------- quick nav (shared, auto-hiding) ---------- */
+.nav-handle{position:fixed;top:0;left:50%;transform:translateX(-50%);width:52px;height:14px;
+  padding:0;border:none;cursor:pointer;background:var(--panel);box-shadow:var(--shadow);
+  border-radius:0 0 8px 8px;z-index:95;opacity:.4;transition:opacity .2s}
+.nav-handle::before{content:"";position:absolute;left:50%;top:5px;transform:translateX(-50%);
+  width:22px;height:3px;border-radius:2px;background:var(--ink-3)}
+.nav-handle:hover{opacity:.9}
+.quicknav{position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-110%);z-index:96;
+  display:flex;gap:0;align-items:stretch;background:var(--panel);backdrop-filter:blur(12px);
+  box-shadow:var(--shadow);border-radius:0 0 6px 6px;opacity:0;pointer-events:none;
+  transition:opacity .25s var(--ease),transform .25s var(--ease)}
+.quicknav.on{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+.quicknav a,.quicknav button{padding:10px 15px 9px;font-family:'Martian Mono',monospace;font-size:10px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);border-right:1px solid var(--hair);
+  text-decoration:none;white-space:nowrap;background:none}
+.quicknav > *:last-child{border-right:none}
+.quicknav a:hover,.quicknav button:hover{color:var(--ink)}
+.quicknav a.current{color:var(--ink);background:rgba(127,127,127,.1)}
+.quicknav .nav-div{width:1px;background:var(--hair);margin:6px 2px;padding:0}
+
+/* ---------- projection ---------- */
+.proj-head{position:absolute;top:0;left:0;right:0;z-index:5;padding:var(--pad);pointer-events:none}
+.proj-title{display:inline-block;font-size:clamp(11px,1.1vw,15px);font-weight:700;letter-spacing:.02em;
+  font-variation-settings:'wdth' 118;text-transform:uppercase;line-height:1.1}
+.proj-title small{display:block;font-weight:400;font-size:.72em;color:var(--ink-3);letter-spacing:.18em;
+  font-variation-settings:'wdth' 100;margin-top:4px}
+.proj-stats-side{position:absolute;right:var(--pad);top:50%;transform:translateY(-50%);z-index:5;
+  text-align:right;pointer-events:none}
+.proj-stats-side .stat{margin-bottom:16px}
+.proj-stats-side .stat:last-child{margin-bottom:0}
+.proj-stats-side b{display:block;font-size:22px;line-height:1.2;font-weight:700;color:var(--ink);
+  font-variation-settings:'wdth' 110}
+.proj-stats-side span{display:block;font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-2);margin-top:2px}
+.bulletin-bar{flex:none;height:clamp(148px,20vh,206px);padding:var(--pad);border-top:var(--rail) solid var(--hair);
+  display:flex;flex-direction:column;justify-content:center;gap:9px;overflow:hidden}
+.bulletin-bar .bar{display:flex;align-items:flex-start;gap:14px}
+.bulletin-bar .tag{flex:none;margin-top:3px;font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--bg);background:var(--ink);padding:4px 7px 3px}
+.bulletin-bar .line{font-size:clamp(19px,3.1vw,40px);line-height:1.15;font-weight:800;
+  font-variation-settings:'wdth' 122;letter-spacing:-.012em;text-transform:uppercase;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.bulletin-bar .line .hi{color:var(--accent,var(--ink))}
+.bulletin-bar .sub{font-family:'Martian Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--ink-3);
+  text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.legend{position:absolute;left:var(--pad);bottom:var(--pad);z-index:5;
+  display:flex;flex-direction:column;gap:5px;pointer-events:none}
+.legend div{display:flex;align-items:center;gap:7px;font-family:'Martian Mono',monospace;font-size:9px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
+.legend i{width:16px;height:3px;display:block}
+
+/* ---------- tablet / kiosk ---------- */
+.kiosk{display:flex;flex-direction:column;height:100%}
+.kiosk-head{padding:var(--pad) var(--pad) 10px}
+/* Both phase variants of the prompt/instructions render stacked in the same grid cell.
+   The cell sizes itself to the TALLER of the two, permanently — so switching between them
+   never changes the header's height, which would otherwise resize the canvas beneath it
+   and visibly shift every station on screen the moment a phase changes. */
+.prompt-slot, .instructions-slot{display:grid}
+.prompt-slot > *, .instructions-slot > *{grid-area:1/1}
+.prompt{font-size:clamp(17px,2.5vw,28px);font-weight:700;font-variation-settings:'wdth' 112;
+  letter-spacing:-.01em;line-height:1.1}
+.prompt em{font-style:normal;color:var(--ink-3)}
+.instructions{margin-top:8px;font-family:'Martian Mono',monospace;font-size:11px;letter-spacing:.03em;
+  color:var(--ink-2);line-height:1.6;max-width:56ch}
+.instructions b{color:var(--ink);font-weight:600}
+.phase-hidden{visibility:hidden}
+.progress-track{display:flex;gap:4px;margin-top:14px}
+.progress-track i{flex:1;height:3px;background:var(--hair);display:block}
+.progress-track i.on{background:var(--ink)}
+.kiosk-foot{padding:12px var(--pad) var(--pad);display:flex;gap:10px;align-items:center;
+  border-top:var(--rail) solid var(--hair)}
+.route-strip{flex:1;min-width:0;display:flex;align-items:center;gap:6px;overflow:hidden;
+  font-family:'Martian Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);white-space:nowrap}
+.route-strip .stop{display:inline-flex;align-items:center;gap:6px}
+.route-strip .dot{width:7px;height:7px;border-radius:50%;flex:none}
+.route-strip .arw{color:var(--ink-3)}
+.route-strip .empty{color:var(--ink-3)}
+.btn{flex:none;padding:13px 22px;font-family:'Martian Mono',monospace;font-size:11px;letter-spacing:.18em;
+  text-transform:uppercase;background:var(--ink);color:var(--bg);transition:opacity .2s,transform .12s}
+.btn:active{transform:translateY(1px)}
+.btn[disabled]{opacity:.22;pointer-events:none}
+.btn.ghost{background:none;color:var(--ink-2);box-shadow:inset 0 0 0 1px var(--hair)}
+.btn.small{padding:9px 14px;font-size:10px}
+
+/* ---------- preview / constellation modal ---------- */
+.modal-veil{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;
+  transition:opacity .3s var(--ease);display:flex;align-items:center;justify-content:center;padding:24px}
+.modal-veil.on{opacity:1;pointer-events:auto}
+.modal{width:min(560px,94vw);background:var(--bg);box-shadow:0 0 0 1px var(--hair),0 30px 80px rgba(0,0,0,.5);
+  transform:translateY(10px) scale(.98);transition:transform .3s var(--ease)}
+.modal-veil.on .modal{transform:translateY(0) scale(1)}
+.modal-head{padding:20px 22px 0}
+.modal-head h3{font-size:20px;font-weight:800;font-variation-settings:'wdth' 118;text-transform:uppercase;line-height:1.15}
+.modal-head p{margin-top:6px;font-family:'Martian Mono',monospace;font-size:10.5px;color:var(--ink-2);letter-spacing:.04em}
+.constellation-wrap{position:relative;margin:16px 22px;height:min(46vh,340px);background:#05060700 ;
+  box-shadow:inset 0 0 0 1px var(--hair)}
+.modal-list{margin:0 22px 4px;display:flex;flex-wrap:wrap;gap:6px}
+.modal-list span{display:inline-flex;align-items:center;gap:6px;font-family:'Martian Mono',monospace;
+  font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;box-shadow:inset 0 0 0 1px var(--hair)}
+.modal-list i{width:7px;height:7px;border-radius:50%}
+.modal-foot{padding:16px 22px 22px;display:flex;gap:8px;flex-wrap:wrap}
+.modal-foot .btn{flex:1;min-width:120px;text-align:center}
+
+/* receipt state (modal reused after posting) */
+.stub-meta{margin:0 22px 18px;display:flex;justify-content:space-between;font-family:'Martian Mono',monospace;
+  font-size:9px;color:var(--ink-3);letter-spacing:.1em;border-top:1px dashed var(--hair);padding-top:12px}
+
+@media print{
+  body *{visibility:hidden}
+  .print-area, .print-area *{visibility:visible}
+  .print-area{position:fixed;inset:0;background:#fff;color:#111;padding:40px}
+  .print-area canvas, .print-area svg{filter:none}
+}
+
+/* ---------- VJ ---------- */
+.vj{padding:var(--pad);overflow-y:auto;height:100%;display:flex;flex-direction:column;gap:22px;
+  max-width:760px;margin:0 auto;width:100%}
+.vj h2{font-size:13px;font-weight:700;letter-spacing:.02em;font-variation-settings:'wdth' 118;
+  text-transform:uppercase;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:7px}
+.chip{padding:11px 12px;text-align:left;box-shadow:inset 0 0 0 1px var(--hair);font-family:'Martian Mono',monospace;
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);transition:.18s}
+.chip:hover{color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);box-shadow:none}
+.chip b{display:block;font-size:9px;color:var(--ink-3);font-weight:400;margin-top:4px;letter-spacing:.06em}
+.chip[aria-pressed="true"] b{color:var(--bg);opacity:.6}
+.chip.danger{box-shadow:inset 0 0 0 1px var(--line-f)}
+.chip.danger:hover{color:var(--line-f)}
+.readout{font-family:'Martian Mono',monospace;font-size:10px;line-height:1.9;color:var(--ink-2)}
+.readout b{color:var(--ink);font-weight:600}
+.row{display:flex;gap:7px;flex-wrap:wrap}
+.status-pill{display:inline-flex;align-items:center;gap:6px;font-family:'Martian Mono',monospace;font-size:9px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.status-pill i{width:6px;height:6px;border-radius:50%;background:var(--ink-3)}
+.status-pill.remote i{background:var(--line-c)}
+
+/* ---------- misc ---------- */
+.corner-btn{position:absolute;z-index:8;padding:7px 9px;font-family:'Martian Mono',monospace;font-size:9px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);box-shadow:inset 0 0 0 1px var(--hair);
+  background:var(--panel);backdrop-filter:blur(8px)}
+.corner-btn:hover{color:var(--ink)}
+.tr{top:var(--pad);right:var(--pad)}
+.br{bottom:var(--pad);right:var(--pad)}
+.toast{position:absolute;left:50%;bottom:88px;transform:translateX(-50%) translateY(8px);z-index:30;
+  padding:8px 13px;background:var(--ink);color:var(--bg);font-family:'Martian Mono',monospace;font-size:10px;
+  letter-spacing:.12em;text-transform:uppercase;opacity:0;pointer-events:none;transition:.25s var(--ease)}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
