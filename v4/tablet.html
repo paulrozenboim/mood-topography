@@ -7,11 +7,12 @@
 <link rel="stylesheet" href="assets/style.css">
 <style>
   .kiosk-head{position:relative}
-  .undo-row{display:flex;gap:8px;margin-top:12px}
+  .undo-row{display:flex;gap:8px;margin-top:14px}
 </style>
 </head>
 <body>
 <div id="app">
+  <button class="corner-btn tr" id="themeBtn" title="Toggle theme">Theme</button>
   <div class="kiosk">
     <div class="kiosk-head">
       <div class="prompt-slot">
@@ -70,7 +71,6 @@
 <script src="assets/store.js"></script>
 <script src="assets/core.js"></script>
 <script src="assets/qrcode.min.js"></script>
-<script src="assets/nav.js"></script>
 <script>
 "use strict";
 const el=(tag,cls,html)=>{const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e};
@@ -88,12 +88,32 @@ const undoBtn=document.getElementById("undoBtn");
 const redoBtn=document.getElementById("redoBtn");
 const toast=document.getElementById("toast");
 
-initQuickNav({current:"tablet", actions:[
-  {label:"Theme", onClick:()=>Store.setTheme("tablet", Store.theme.tablet==="dark"?"light":"dark")}
-]});
+// Tablet has no shared nav on purpose — a participant shouldn't be able to reach
+// Settings, Projection, or Home from the kiosk mid-show. Only the theme button
+// stays, top-right, so operators can flip dark/light without touching the router.
+document.getElementById("themeBtn").onclick =
+  ()=>Store.setTheme("tablet", Store.theme.tablet==="dark"?"light":"dark");
 document.documentElement.dataset.theme = Store.theme.tablet;
 
 let phase="anchor"; // anchor | draw
+
+// Rotating opening prompts — same intention (locate yourself right now),
+// different framings so a returning participant doesn't see the identical
+// question twice in a row. Rotated on load and after every cast.
+const OPENING_PROMPTS = [
+  "Where are you right now?",
+  "What state are you in tonight?",
+  "Where does this moment find you?",
+  "What's your ground tonight?",
+  "Which of these feels most like now?",
+  "Where do you stand tonight?"
+];
+let promptIdx = Math.floor(Math.random() * OPENING_PROMPTS.length);
+function nextOpeningPrompt(){
+  promptIdx = (promptIdx + 1) % OPENING_PROMPTS.length;
+  promptAnchor.textContent = OPENING_PROMPTS[promptIdx];
+}
+promptAnchor.textContent = OPENING_PROMPTS[promptIdx];
 
 function say(msg){ toast.textContent=msg; toast.classList.add("on"); clearTimeout(say._t); say._t=setTimeout(()=>toast.classList.remove("on"),1500) }
 
@@ -133,7 +153,7 @@ function undo(){
   else ns.pop();
   render();
 }
-function reset(){ phase="anchor"; view.draft={nodes:[],pointer:null}; render() }
+function reset(){ phase="anchor"; view.draft={nodes:[],pointer:null}; nextOpeningPrompt(); render() }
 undoBtn.onclick=undo;
 redoBtn.onclick=reset;
 

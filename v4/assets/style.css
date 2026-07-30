@@ -87,23 +87,27 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 
 /* ---------- tablet / kiosk ---------- */
 .kiosk{display:flex;flex-direction:column;height:100%}
-.kiosk-head{padding:var(--pad) var(--pad) 10px}
+/* Header is centered above the map so the prompt and instructions catch the eye
+   the moment someone steps up. Old layout had them left-aligned in a narrow
+   column — participants were reading the map and never noticing the ask. */
+.kiosk-head{padding:var(--pad) var(--pad) 10px;text-align:center}
 /* Both phase variants of the prompt/instructions render stacked in the same grid cell.
    The cell sizes itself to the TALLER of the two, permanently — so switching between them
    never changes the header's height, which would otherwise resize the canvas beneath it
    and visibly shift every station on screen the moment a phase changes. */
 .prompt-slot, .instructions-slot{display:grid}
 .prompt-slot > *, .instructions-slot > *{grid-area:1/1}
-.prompt{font-size:clamp(17px,2.5vw,28px);font-weight:700;font-variation-settings:'wdth' 112;
+.prompt{font-size:clamp(20px,2.8vw,32px);font-weight:800;font-variation-settings:'wdth' 116;
   letter-spacing:-.01em;line-height:1.1}
 .prompt em{font-style:normal;color:var(--ink-3)}
-.instructions{margin-top:8px;font-family:'Martian Mono',monospace;font-size:11px;letter-spacing:.03em;
-  color:var(--ink-2);line-height:1.6;max-width:56ch}
+.instructions{margin:12px auto 0;font-family:'Martian Mono',monospace;font-size:13px;letter-spacing:.03em;
+  color:var(--ink-2);line-height:1.6;max-width:62ch}
 .instructions b{color:var(--ink);font-weight:600}
 .phase-hidden{visibility:hidden}
-.progress-track{display:flex;gap:4px;margin-top:14px}
+.progress-track{display:flex;gap:4px;margin-top:16px}
 .progress-track i{flex:1;height:3px;background:var(--hair);display:block}
 .progress-track i.on{background:var(--ink)}
+.undo-row{justify-content:center}
 .kiosk-foot{padding:12px var(--pad) var(--pad);display:flex;gap:10px;align-items:center;
   border-top:var(--rail) solid var(--hair)}
 .route-strip{flex:1;min-width:0;display:flex;align-items:center;gap:6px;overflow:hidden;

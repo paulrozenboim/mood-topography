@@ -67,16 +67,47 @@ const Sync = (()=>{
   };
 })();
 
-/* ---------------- Store ---------------------------------------------------- */
+/* ---------------- Store ----------------------------------------------------
+   State survives page refresh / tab close / browser restart via localStorage.
+   Every mutation writes; page load reads. localStorage is per-origin per browser,
+   so multiple tabs on the same machine share it — BroadcastChannel still handles
+   live tab-to-tab updates, this just keeps a durable copy so nothing is lost if
+   the tablet is bumped, refreshed, or the browser is closed mid-show.
+   ---
+   Storage key includes a schema version — bumping it invalidates old data
+   automatically if the shape ever changes.
+   -------------------------------------------------------------------------- */
+const STORAGE_KEY = "topography-of-us:v1";
+
+function loadPersisted(){
+  try{
+    if(typeof localStorage==="undefined") return null;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    const p = JSON.parse(raw);
+    if(!p || !Array.isArray(p.paths)) return null;
+    return p;
+  }catch(_){ return null }
+}
+function persistNow(){
+  try{
+    if(typeof localStorage==="undefined") return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      paths: Store.paths, filter: Store.filter, auto: Store.auto, theme: Store.theme
+    }));
+  }catch(_){}
+}
+
+const _persisted = loadPersisted();
 const Store = {
-  paths:[],
-  filter:{type:"all"},
-  auto:true,
-  theme:{projection:"dark", tablet:"light"},
+  paths: _persisted?.paths || [],
+  filter: _persisted?.filter || {type:"all"},
+  auto: _persisted?.auto ?? true,
+  theme: _persisted?.theme || {projection:"dark", tablet:"light"},
   listeners:new Set(),
   version:0,
   sub(fn){this.listeners.add(fn); return ()=>this.listeners.delete(fn)},
-  emit(evt){this.version++; this.listeners.forEach(fn=>fn(evt))},
+  emit(evt){this.version++; this.listeners.forEach(fn=>fn(evt)); persistNow()},
 
   addPath(p, {broadcast=true, animate=true}={}){
     if(this.paths.some(x=>x.id===p.id)) return;
