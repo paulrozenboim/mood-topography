@@ -13,7 +13,12 @@
     text-transform:uppercase;letter-spacing:-.01em;line-height:1.05}
   .viewer .const{position:relative;flex:1;min-height:clamp(320px,60vh,540px);
     box-shadow:inset 0 0 0 1px var(--hair)}
-  .viewer .const canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  /* Canvas draws the constellation but is never actually shown — the drawing is
+     exported to an <img> so mobile long-press → "Save Image" works. Canvases
+     don't offer that context-menu on iOS or Android. */
+  .viewer .const canvas{position:absolute;inset:0;width:100%;height:100%;display:none}
+  .viewer .const img{position:absolute;inset:0;width:100%;height:100%;
+    object-fit:contain;display:block}
   .viewer .stops{display:flex;flex-wrap:wrap;gap:6px}
   .viewer .stops span{display:inline-flex;align-items:center;gap:6px;font-family:'Martian Mono',monospace;
     font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;box-shadow:inset 0 0 0 1px var(--hair)}
@@ -33,14 +38,19 @@
     <h1 id="title">Your constellation</h1>
     <div class="eyebrow">Teder · Tel Aviv</div>
   </header>
-  <div class="const" id="constWrap"><canvas id="star"></canvas></div>
+  <div class="const" id="constWrap">
+    <canvas id="star" aria-hidden="true"></canvas>
+    <img id="starImg" alt="Your constellation">
+  </div>
   <div class="stops" id="stops"></div>
   <p class="hint" id="hint"><b>Long-press the image to save it.</b> This link stays live — you can come back to it, share it, or open it on another device.</p>
   <div class="credits">
     <div class="row"><b>The Topography of Us</b><span>Democracy Week · Tel Aviv · 2026</span></div>
     <div class="row"><span>Cast at Teder</span><span id="castDate"></span></div>
-    
-      <a href="https://www.instagram.com/unapaulogetic_" target="_blank" rel="noopener"><div class="row"><span>Made by <b>@unapaulogetic_</b></span></a></div>
+    <a class="row row-link" href="https://www.instagram.com/unapaulogetic_" target="_blank" rel="noopener">
+      <span>Made by <b>@unapaulogetic_</b></span>
+      <span>instagram.com/unapaulogetic_ →</span>
+    </a>
   </div>
 </div>
 
@@ -89,9 +99,22 @@ if(!ids.length){
   } else {
     dateEl.textContent = "";
   }
-  const draw=()=> renderConstellation(star, ids, theme);
+  // Draw into the (hidden) canvas, then export to a PNG data URL and hand it to
+  // the visible <img>. Mobile browsers offer "Save Image" on <img> long-press
+  // but not on <canvas> — this swap is what makes the keepsake saveable to the
+  // participant's camera roll.
+  const starImg = document.getElementById("starImg");
+  const draw = () => {
+    renderConstellation(star, ids, theme);
+    try{ starImg.src = star.toDataURL("image/png") }catch(_){}
+  };
   requestAnimationFrame(draw);
-  window.addEventListener("resize", ()=>requestAnimationFrame(draw));
+  // Re-export on resize so the saved image matches whatever the viewer is looking at.
+  let resizeT = null;
+  window.addEventListener("resize", ()=>{
+    clearTimeout(resizeT);
+    resizeT = setTimeout(()=>requestAnimationFrame(draw), 120);
+  });
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", ()=>location.reload());
 }
 </script>
