@@ -45,6 +45,11 @@
           <button class="chip danger" id="clearAllBtn">Clear everything<b>real casts included — can't be undone</b></button>
         </div>
       </div>
+
+      <div>
+        <h2>Sync mode</h2>
+        <div class="readout" id="syncModeInfo"></div>
+      </div>
     </div>
 
     <div class="vj-col vj-readouts">
@@ -61,8 +66,6 @@
     </div>
   </div>
 </div>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="assets/remote-config.js"></script>
 <script src="assets/store.js"></script>
 <script src="assets/core.js"></script>
@@ -142,12 +145,43 @@ function refresh(){
 Store.sub(refresh); refresh();
 
 const pill=document.getElementById("statusPill"), statusText=document.getElementById("statusText");
-Sync.onStatus(mode=>{
-  pill.classList.toggle("remote", mode==="remote");
-  statusText.textContent = mode==="remote"
-    ? "Connected — synced across devices"
-    : "Local demo mode — this device only";
-});
+const syncModeInfo=document.getElementById("syncModeInfo");
+
+function renderSyncInfo(mode){
+  // Top status pill — one-line at-a-glance
+  pill.classList.toggle("remote", mode==="local" || mode==="cloud");
+  statusText.textContent =
+    mode==="local"   ? "Connected — local relay (this network)" :
+    mode==="cloud"   ? "Connected — cloud (Firebase)" :
+    mode==="offline" ? "Sync offline — this device only" :
+                       "Local demo mode — this device only";
+
+  // Full "Sync mode" panel — explains what's on and how to switch. Switching
+  // is really "visit a different URL": the operator laptop's local address
+  // when the Python relay is running, or the github.io URL for cloud.
+  const cloudURL = "https://paulrozenboim.github.io/topography-of-us/";
+  const cloudNote = `<div>To go cloud again: open <b>${cloudURL}</b> on this device.</div>`;
+  const localNote = `<div>To go local: run <b>python sync-server.py</b> on the operator laptop, then open the <b>http://&lt;laptop-ip&gt;:8765/</b> URL it prints. No internet needed.</div>`;
+
+  if(mode==="local"){
+    syncModeInfo.innerHTML = `
+      <b>Local — via this laptop's relay.</b> Devices join the operator laptop's hotspot and sync through it. No internet required.
+      <br><br>${cloudNote}`;
+  } else if(mode==="cloud"){
+    syncModeInfo.innerHTML = `
+      <b>Cloud — Firebase Realtime Database.</b> Works over any internet connection. Every message routes through Firebase.
+      <br><br>${localNote}`;
+  } else if(mode==="offline"){
+    syncModeInfo.innerHTML = `
+      <b>Offline.</b> Firebase couldn't be reached and the local relay isn't running. Only tabs on this device see each other (BroadcastChannel).
+      <br><br>${localNote}`;
+  } else {
+    // "local demo mode" here is store.js's default label for BroadcastChannel-only,
+    // fired before any remote transport has been adopted. Sync is initialising.
+    syncModeInfo.innerHTML = `<b>Initialising…</b> probing for a local relay, then falling back to cloud.`;
+  }
+}
+Sync.onStatus(renderSyncInfo);
 Sync.hello();
 initQuickNav({current:"settings"});
 </script>

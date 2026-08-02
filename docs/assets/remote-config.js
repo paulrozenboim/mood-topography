@@ -1,61 +1,124 @@
 /* ============================================================
-   Firebase Realtime Database — implements the TOPO_REMOTE contract that
-   store.js looks for. When this file is present and Firebase is reachable,
-   every path/filter/theme/clear routes over Firebase; otherwise store.js
-   falls back to BroadcastChannel (same-device tabs only).
+   TOPO_REMOTE dispatcher — decides at page-load time whether to talk to a
+   local relay (Python sync-server.py) or to Firebase Realtime Database.
 
-   Loaded on tablet.html, projection.html, settings.html.
-   Not loaded on view.html (read-only from URL hash, no Store interaction)
-   or index.html (static landing page).
+   Detection is by same-origin probe of /health, with a hard 500 ms timeout:
+     · /health returns 200  →  we're on the local Python server, use LOCAL mode
+     · anything else / timeout → use CLOUD mode (Firebase)
 
-   Load order in each page's <head>, BEFORE assets/store.js:
-     firebase-app-compat.js  → firebase-database-compat.js  → this file
+   Cloud mode ONLY reaches out to gstatic.com if that path fires — otherwise the
+   Firebase SDK is never fetched. That matters on event night: a laptop hotspot
+   with no internet forwarding would otherwise stall for ~30 s on every page
+   load trying to fetch the SDK from gstatic.com.
+
+   No matter which branch wins, the surface for store.js is the same:
+     window.TOPO_REMOTE = {send, subscribe}
+   store.js also gets a window.TOPO_MODE ("local" | "cloud") for the sync-mode
+   pill in settings.
    ============================================================ */
 "use strict";
 
-firebase.initializeApp({
-  apiKey: "AIzaSyBHzt9jQ0by9P0Obn3Abplfuezet4eruX8",
-  authDomain: "topography-of-us.firebaseapp.com",
-  databaseURL: "https://topography-of-us-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "topography-of-us",
-  storageBucket: "topography-of-us.firebasestorage.app",
-  messagingSenderId: "578893298967",
-  appId: "1:578893298967:web:43f6a5a753557d3d734b52"
-});
+(function(){
+  const FIREBASE_APP_URL = "https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js";
+  const FIREBASE_DB_URL  = "https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js";
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyBHzt9jQ0by9P0Obn3Abplfuezet4eruX8",
+    authDomain: "topography-of-us.firebaseapp.com",
+    databaseURL: "https://topography-of-us-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "topography-of-us",
+    storageBucket: "topography-of-us.firebasestorage.app",
+    messagingSenderId: "578893298967",
+    appId: "1:578893298967:web:43f6a5a753557d3d734b52"
+  };
 
-const _ref = firebase.database().ref("messages");
-const _connectTime = Date.now();
+  const _connectTime = Date.now();
 
-window.TOPO_REMOTE = {
-  send(msg){
-    // Handshake messages ("hello", "state") are BroadcastChannel-specific — they
-    // let two same-device tabs bootstrap each other. Over Firebase, child_added
-    // replay handles hydration natively; pushing hello would just pollute the log.
-    if(msg.k === "hello" || msg.k === "state") return;
+  function probeLocal(){
+    // AbortController with a 500 ms timeout — long enough for a laptop-loopback
+    // fetch, short enough that offline visitors don't feel a stall.
+    const ctl = new AbortController();
+    const t = setTimeout(()=>ctl.abort(), 500);
+    return fetch("/health", {signal: ctl.signal, cache:"no-store"})
+      .then(r => r.ok && r.status === 200)
+      .catch(()=>false)
+      .finally(()=>clearTimeout(t));
+  }
 
-    // A full "clear" needs to purge the durable log too, otherwise any new
-    // client joining after the clear would re-hydrate the "cleared" paths from
-    // Firebase's history. Wipe first, then push the clear message so live peers
-    // still see it and reset their own local Store.
-    if(msg.k === "clear"){
-      _ref.remove().then(()=>_ref.push({...msg, ts: Date.now()}));
-      return;
-    }
-
-    _ref.push({...msg, ts: Date.now()});
-  },
-  subscribe(fn){
-    // limitToLast(500) caps the initial replay so a client joining after a very
-    // busy night isn't held hostage by hydration. Store.addPath already dedupes
-    // by path.id, so overlapping localStorage-hydrated state and Firebase replay
-    // is safe — duplicates are silently dropped.
-    _ref.limitToLast(500).on("child_added", snap => {
-      const v = snap.val(); if(!v) return;
-      // Messages older than ~2s before we connected are historical — hydrate
-      // silently. Anything newer is a live event from another device: let the
-      // projection's injection animation fire, let the wall's stats update.
-      if(v.ts && v.ts < _connectTime - 2000) v._historical = true;
-      fn(v);
+  function loadScript(src){
+    return new Promise((res, rej)=>{
+      const s = document.createElement("script");
+      s.src = src; s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
     });
   }
-};
+
+  function initLocal(){
+    window.TOPO_MODE = "local";
+    let handler = null, queued = [];
+    // EventSource auto-reconnects on transient disconnects — free durability
+    // when the Python server restarts or the wifi hiccups.
+    const es = new EventSource("/sub");
+    es.onmessage = ev => {
+      let m; try{ m = JSON.parse(ev.data) }catch(_){ return }
+      if(handler) handler(m); else queued.push(m);
+    };
+    window.TOPO_REMOTE = {
+      send(msg){
+        // Handshake messages are BroadcastChannel-only; the sync-server's
+        // replay-on-connect handles hydration natively.
+        if(msg.k === "hello" || msg.k === "state") return;
+        fetch("/send", {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({...msg, ts: Date.now()})
+        }).catch(()=>{});
+      },
+      subscribe(fn){
+        handler = fn;
+        // deliver anything that arrived before store.js was ready
+        queued.forEach(fn); queued = [];
+      }
+    };
+  }
+
+  async function initCloud(){
+    window.TOPO_MODE = "cloud";
+    try{
+      await Promise.all([loadScript(FIREBASE_APP_URL), loadScript(FIREBASE_DB_URL)]);
+    }catch(_){
+      // Firebase SDK didn't load (usually: no internet + not on the Python
+      // server). Leave TOPO_REMOTE unset so store.js falls back to
+      // BroadcastChannel — better than an app hang or a crash.
+      console.warn("Firebase SDK failed to load — cross-device sync disabled.");
+      window.TOPO_MODE = "offline";
+      return;
+    }
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const ref = firebase.database().ref("messages");
+
+    window.TOPO_REMOTE = {
+      send(msg){
+        if(msg.k === "hello" || msg.k === "state") return;
+        // A "clear" purges the durable log too so a fresh client doesn't
+        // re-hydrate the just-cleared paths.
+        if(msg.k === "clear"){
+          ref.remove().then(()=>ref.push({...msg, ts: Date.now()}));
+          return;
+        }
+        ref.push({...msg, ts: Date.now()});
+      },
+      subscribe(fn){
+        // limitToLast caps hydration so a client joining after a very busy
+        // night isn't held hostage by replay. Store.addPath dedupes by id.
+        ref.limitToLast(500).on("child_added", snap => {
+          const v = snap.val(); if(!v) return;
+          // Historical replays: no injection animation on the projection.
+          if(v.ts && v.ts < _connectTime - 2000) v._historical = true;
+          fn(v);
+        });
+      }
+    };
+  }
+
+  probeLocal().then(isLocal => isLocal ? initLocal() : initCloud());
+})();

@@ -35,11 +35,23 @@ const Sync = (()=>{
 
   function setStatus(s){ mode=s; statusListeners.forEach(fn=>fn(mode)) }
 
-  // if a page defines window.TOPO_REMOTE before this script loads, use it instead
-  if(typeof window!=="undefined" && window.TOPO_REMOTE && typeof window.TOPO_REMOTE.send==="function"){
+  // remote-config.js now sets window.TOPO_REMOTE *asynchronously* — it probes for
+  // the local Python server and, if that misses, dynamically loads Firebase. So
+  // we can't just check once at script load; we poll briefly, then give up. Once
+  // adopted, we switch mode and route messages accordingly.
+  function tryAdoptRemote(){
+    if(typeof window==="undefined") return false;
+    if(!window.TOPO_REMOTE || typeof window.TOPO_REMOTE.send!=="function") return false;
     remote = window.TOPO_REMOTE;
     remote.subscribe(m=> Sync._receive(m));
-    setStatus("remote");
+    setStatus(window.TOPO_MODE || "remote");
+    return true;
+  }
+  if(!tryAdoptRemote()){
+    const pollIv = setInterval(()=>{ if(tryAdoptRemote()) clearInterval(pollIv) }, 100);
+    // 6 s cap — long enough for Firebase SDK to arrive over slow LTE, short
+    // enough that a truly-offline visitor stops waiting and uses BroadcastChannel.
+    setTimeout(()=>clearInterval(pollIv), 6000);
   }
 
   return {
