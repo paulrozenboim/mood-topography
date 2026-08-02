@@ -1,4 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,300..900;1,62..125,300..900&family=Martian+Mono:wght@300;400;600&display=swap');
+/* Bundled variable fonts — no internet dependency. The three files cover the full
+   weight + width range the design uses (via font-variation-settings: 'wdth' NNN).
+   URLs are quoted because the filenames contain commas. */
+@font-face{
+  font-family:'Archivo';
+  src:url("fonts/Archivo-VariableFont_wdth,wght.ttf") format("truetype-variations"),
+      url("fonts/Archivo-VariableFont_wdth,wght.ttf") format("truetype");
+  font-weight:100 900; font-stretch:62% 125%; font-style:normal; font-display:swap;
+}
+@font-face{
+  font-family:'Archivo';
+  src:url("fonts/Archivo-Italic-VariableFont_wdth,wght.ttf") format("truetype-variations"),
+      url("fonts/Archivo-Italic-VariableFont_wdth,wght.ttf") format("truetype");
+  font-weight:100 900; font-stretch:62% 125%; font-style:italic; font-display:swap;
+}
+@font-face{
+  font-family:'Martian Mono';
+  src:url("fonts/MartianMono-VariableFont_wdth,wght.ttf") format("truetype-variations"),
+      url("fonts/MartianMono-VariableFont_wdth,wght.ttf") format("truetype");
+  font-weight:100 800; font-stretch:75% 112%; font-style:normal; font-display:swap;
+}
 
 :root{
   --line-f:#E8402A; --line-r:#3B57C4; --line-c:#00A277; --line-m:#F2A007;
@@ -126,11 +146,23 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 
 /* ---------- preview / constellation modal ---------- */
 .modal-veil{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;
-  transition:opacity .3s var(--ease);display:flex;align-items:center;justify-content:center;padding:24px}
+  transition:opacity .3s var(--ease);display:flex;align-items:center;justify-content:center;padding:20px 16px}
 .modal-veil.on{opacity:1;pointer-events:auto}
-.modal{width:min(560px,94vw);background:var(--bg);box-shadow:0 0 0 1px var(--hair),0 30px 80px rgba(0,0,0,.5);
+/* The modal is a flex column with a hard viewport-relative height cap. The
+   print-area (constellation + list + keepsake + credits) scrolls internally;
+   the foot with the buttons stays pinned at the bottom so the participant
+   can always reach Print/Done without hunting. dvh is used to handle mobile
+   Safari's URL bar collapsing correctly — vh includes it, dvh doesn't. */
+.modal{width:min(560px,94vw);
+  max-height:calc(100vh - 40px);
+  max-height:calc(100dvh - 40px);
+  display:flex;flex-direction:column;
+  background:var(--bg);box-shadow:0 0 0 1px var(--hair),0 30px 80px rgba(0,0,0,.5);
   transform:translateY(10px) scale(.98);transition:transform .3s var(--ease)}
 .modal-veil.on .modal{transform:translateY(0) scale(1)}
+.print-area{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch}
+.modal-foot{flex:0 0 auto;border-top:1px solid var(--hair)}
 .modal-head{padding:20px 22px 0}
 .modal-head h3{font-size:20px;font-weight:800;font-variation-settings:'wdth' 118;text-transform:uppercase;line-height:1.15}
 .modal-head p{margin-top:6px;font-family:'Martian Mono',monospace;font-size:10.5px;color:var(--ink-2);letter-spacing:.04em}
