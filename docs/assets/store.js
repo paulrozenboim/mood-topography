@@ -52,7 +52,11 @@ const Sync = (()=>{
     },
     hello(){ this.send({k:"hello"}) },
     _receive(m){
-      if(m.k==="path")   Store.addPath(m.p,{broadcast:false});
+      // Firebase's child_added replays every past message on first connect. The
+      // remote adapter tags those with _historical so we can hydrate silently —
+      // otherwise the projection would try to play an injection animation for
+      // every path in the log the moment the wall opens.
+      if(m.k==="path")   Store.addPath(m.p,{broadcast:false, animate: !m._historical});
       if(m.k==="filter") Store.setFilter(m.f,{broadcast:false});
       if(m.k==="auto")   Store.setAuto(m.v,{broadcast:false});
       if(m.k==="theme")  Store.setTheme(m.which,m.val,{broadcast:false});
