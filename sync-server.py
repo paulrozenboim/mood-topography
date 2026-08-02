@@ -35,6 +35,7 @@ from urllib.parse import urlparse
 
 PORT = 8765
 DOCS_DIR = Path(__file__).parent / "docs"
+LOG_FILE = Path(__file__).parent / "sync-log.jsonl"    # durable event archive
 MAX_LOG = 5000                        # cap replay length so hydration stays snappy
 
 _log = deque()
@@ -50,6 +51,52 @@ def _broadcast(msg):
                 q.put_nowait(msg)
             except Exception:
                 pass
+
+
+def _load_log_from_disk():
+    """Rebuild _log from the durable JSONL file on startup so a laptop reboot,
+    a Ctrl+C, or a crash doesn't lose the night's casts. Bad lines are skipped
+    rather than aborting startup."""
+    if not LOG_FILE.exists():
+        return
+    loaded, skipped = 0, 0
+    try:
+        with LOG_FILE.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    _log.append(json.loads(line))
+                    loaded += 1
+                except Exception:
+                    skipped += 1
+                    continue
+        # cap in-memory replay window; keep the on-disk log intact
+        while len(_log) > MAX_LOG:
+            _log.popleft()
+        print(f"  Loaded {loaded} past messages from {LOG_FILE.name}"
+              + (f" (skipped {skipped} bad lines)" if skipped else ""))
+    except Exception as e:
+        print(f"  Warning: couldn't read {LOG_FILE.name}: {e}")
+
+
+def _append_to_disk(msg):
+    """One JSON per line, appended atomically enough for our purposes.
+    Failure is silent — losing a durable copy is worse than crashing the send."""
+    try:
+        with LOG_FILE.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(msg) + "\n")
+    except Exception:
+        pass
+
+
+def _truncate_disk():
+    """Wipe the durable log — used by the 'clear' message so a reset really resets."""
+    try:
+        LOG_FILE.write_text("", encoding="utf-8")
+    except Exception:
+        pass
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -87,6 +134,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if msg.get("k") == "clear":
                 _log.clear()
                 _log.append(msg)
+                _truncate_disk()
+            _append_to_disk(msg)
         _broadcast(msg)
         self.send_response(204); self._cors(); self.end_headers()
 
@@ -156,16 +205,31 @@ class ThreadedServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 def _lan_ip():
-    """Best-effort LAN IP so we can print the URL the tablet should visit."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    """Best-effort LAN IP so we can print the URL the tablet should visit.
+    Tries two methods so an offline setup (macOS Internet Sharing with no
+    upstream internet) still returns a real address instead of loopback."""
+    # Method 1: UDP "connect" trick — doesn't send packets, just picks the
+    # outbound interface. Fails when there's no route to the public internet.
     try:
-        # UDP "connect" doesn't send packets — it just picks the outbound iface
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
-    except Exception:
-        return "127.0.0.1"
-    finally:
+        ip = s.getsockname()[0]
         s.close()
+        if ip and not ip.startswith("127."):
+            return ip
+    except Exception:
+        pass
+    # Method 2: enumerate hostname's bound IPs. On macOS this returns the
+    # bridge100 address (192.168.2.1 for Internet Sharing) even offline.
+    try:
+        host = socket.gethostname()
+        _, _, ips = socket.gethostbyname_ex(host)
+        for ip in ips:
+            if ip and not ip.startswith("127.") and "." in ip:
+                return ip
+    except Exception:
+        pass
+    return None
 
 
 if __name__ == "__main__":
@@ -173,19 +237,26 @@ if __name__ == "__main__":
         print(f"ERROR: docs/ folder not found at {DOCS_DIR}")
         raise SystemExit(1)
 
+    _load_log_from_disk()
+
     ip = _lan_ip()
     banner = "=" * 66
     print(banner)
-    print("  The Topography of Us — local sync relay + static server")
+    print("  The Topography of Us -- local sync relay + static server")
     print(banner)
     print(f"  Serving from : {DOCS_DIR}")
+    print(f"  Archive log  : {LOG_FILE.name}  ({len(_log)} messages loaded)")
     print(f"  Port         : {PORT}")
     print()
     print(f"  On THIS laptop        ->  http://localhost:{PORT}/")
-    print(f"  From tablet/phone     ->  http://{ip}:{PORT}/")
+    if ip:
+        print(f"  From tablet/phone     ->  http://{ip}:{PORT}/")
+    else:
+        print(f"  From tablet/phone     ->  http://<this-mac-ip>:{PORT}/")
+        print(f"                              (find with: ipconfig getifaddr en0)")
     print()
     print(f"  Join this laptop's hotspot on the tablet, then open the URL")
-    print(f"  above. The app auto-detects local mode — no internet needed.")
+    print(f"  above. The app auto-detects local mode -- no internet needed.")
     print(f"  Ctrl+C to stop.")
     print(banner)
 

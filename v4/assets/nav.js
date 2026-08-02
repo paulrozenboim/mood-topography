@@ -12,7 +12,8 @@ function initQuickNav({current, actions=[]}={}){
     ["index.html","Home","index"],
     ["tablet.html","Cast Path","tablet"],
     ["projection.html","Projection","projection"],
-    ["settings.html","Settings","settings"]
+    ["settings.html","Settings","settings"],
+    ["archive.html","Archive","archive"]
   ];
   const handle=document.createElement("button");
   handle.className="nav-handle"; handle.type="button";

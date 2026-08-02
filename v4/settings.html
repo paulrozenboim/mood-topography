@@ -50,6 +50,17 @@
         <h2>Sync mode</h2>
         <div class="readout" id="syncModeInfo"></div>
       </div>
+
+      <div>
+        <h2>Archive</h2>
+        <div class="readout" style="margin-bottom:8px">Every path currently in this session — download as JSON to keep it, or re-import a saved archive to revisit an old event. The gallery page lists them all with links to each constellation.</div>
+        <div class="row">
+          <a class="chip" href="archive.html" target="_blank">Open gallery<b>every path as a browsable card</b></a>
+          <button class="chip" id="exportBtn">Download as JSON<b>timestamped, all paths in this session</b></button>
+          <button class="chip" id="importBtn">Import from JSON<b>merges a saved archive back in</b></button>
+          <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+        </div>
+      </div>
     </div>
 
     <div class="vj-col vj-readouts">
@@ -183,6 +194,52 @@ function renderSyncInfo(mode){
 }
 Sync.onStatus(renderSyncInfo);
 Sync.hello();
+
+/* ---- Archive: export + import --------------------------------------------
+   Export dumps the current Store.paths (plus station metadata for future-proofing
+   against station renames) as a JSON file. Import merges paths back in, preserving
+   each path's original seeded flag — an imported real cast stays real, an imported
+   demo path stays demo, so the "revisit an old event" flow shows honest numbers.
+   -------------------------------------------------------------------------- */
+document.getElementById("exportBtn").onclick = () => {
+  const payload = {
+    exported: new Date().toISOString(),
+    count: Store.paths.length,
+    stations: NODES.map(n=>({id:n.id, n:n.n, c:n.c})),
+    paths: Store.paths
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+  const stamp = new Date().toISOString().replace(/[-:]/g,"").slice(0,15); // YYYYMMDDTHHMMSS
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `topography-of-us-${stamp}.json`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+};
+
+const importFile = document.getElementById("importFile");
+document.getElementById("importBtn").onclick = () => importFile.click();
+importFile.onchange = async () => {
+  const f = importFile.files[0]; if(!f) return;
+  try{
+    const data = JSON.parse(await f.text());
+    if(!Array.isArray(data.paths)) throw new Error("no `paths` array in file");
+    let added = 0, skipped = 0;
+    for(const p of data.paths){
+      if(!p || !p.id || !Array.isArray(p.nodes)){ skipped++; continue }
+      const before = Store.paths.length;
+      // preserve original seeded/real flag from the export
+      Store.addPath({id:p.id, t:p.t||Date.now(), nodes:p.nodes, seeded: !!p.seeded});
+      if(Store.paths.length > before) added++;
+    }
+    alert(`Imported ${added} paths` +
+          (skipped ? ` (${skipped} skipped — bad shape)` : "") +
+          `\n${data.paths.length - added - skipped} were already in the store.`);
+  }catch(e){
+    alert("Import failed: " + e.message);
+  }
+  importFile.value = ""; // let the same file be re-picked later
+};
 initQuickNav({current:"settings"});
 </script>
 </body>

@@ -7,3 +7,6 @@ Thumbs.db
 v1/
 v2/
 v3/
+
+# Local sync-server's durable archive — event data, per-machine, do not publish
+sync-log.jsonl
