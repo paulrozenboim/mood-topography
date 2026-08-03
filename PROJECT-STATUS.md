@@ -1,93 +1,135 @@
 # The Topography of Us — Project Status
 
-*Last updated after the multi-page rebuild + nav/legibility pass.*
+*Last updated after the cross-device sync + archive + self-hosted-fonts pass.*
 
 ## What this is
 
 A live data-sculpture for Democracy Month Art Lab at Teder, Tel Aviv. Participants
-trace a path across 36 human states on a tablet — where they are now, where they're
-heading — and a public projection aggregates every path into a shared civic map,
-narrating what it finds in short bulletins as the night goes on.
+trace a path across 36 human states on a tablet; a public projection aggregates
+every path into a shared civic map, narrating what it finds in short bulletins as
+the night goes on.
 
-## Where it stands
+## Where it stands — shipped
 
-**Structure.** A real multi-page site (`docs/`), not a single-file SPA — ready to push
-straight to GitHub Pages. Four pages, each its own bookmarkable URL:
+**Six pages, each its own URL.** `index`, `tablet` (labelled "Cast Path" in the
+UI), `projection`, `settings`, `archive`, and `view` (the participant-side keepsake
+that a phone reaches by scanning the QR on the cast-receipt modal).
 
-- `index.html` — landing page, links to the other three
-- `tablet.html` — the kiosk. Anchor a station, drag through 3–10 more, no timer,
-  Mini Metro–style undo (drag back over a station to erase to that point), a
-  print-ready "constellation" preview before casting
-- `projection.html` — the public wall. Aggregate map, pan/zoom, dark/light theme,
-  an injection animation when a new path is cast, side-mounted live stats, a
-  standalone bulletin footer (not an overlay), auto-pilot cycling through views
-- `settings.html` — control room. Override what the wall shows, toggle theme, seed
-  or clear demo data independently from real casts, watch the live bulletin queue
+**Cross-device sync, both modes wired.** Two clients on two devices are guaranteed
+to see the same paths in real time:
 
-**Shared core** (`assets/`): station data and the layout solver's output, the canvas
-renderer (`MapView`), the aggregate analysis + bulletin-writing logic, and `Store` /
-`Sync` — app state cleanly separated from its transport, so a real backend can be
-wired in later without touching anything else.
+- **Cloud** — Firebase Realtime Database. This is what the deployed
+  `paulrozenboim.github.io/topography-of-us/` URL uses. Persistent, works over any
+  internet.
+- **Local** — a zero-dependency Python 3 script (`sync-server.py`) that serves the
+  site AND relays messages via Server-Sent Events. Zero internet needed. The relay
+  writes every message to `sync-log.jsonl` on disk so nothing is lost across
+  Ctrl+C or laptop reboots.
 
-**Station layout.** Solved algorithmically, not placed by hand: each of the four
-lines (Friction, Foundations, Connection, Momentum) fills its own region of the
-field, semantically related stations pull toward each other across lines, and every
-station keeps a hard minimum clearance from every other. Verified collision-free
-from a phone screen up to a 1440p projector.
+Which mode is active is decided automatically at page-load time via a `/health`
+probe. Firebase SDK is only fetched when cloud mode wins, so an offline visitor
+doesn't get a 30-second stall waiting on `gstatic.com`.
 
-**A small auto-hiding nav** sits on all four pages — a slim handle at the top edge;
-tap it for links between pages plus (on tablet/projection) the Theme/Fit controls.
-It only opens on deliberate contact with the handle and closes itself after a few
-seconds, so it never fights with drawing a path or panning the map.
+**Post-cast keepsake.** After a participant casts a path, the receipt modal shows
+a QR code and a shareable URL that encodes the path (base36 station IDs) + cast
+timestamp into the URL hash. Scanning opens `view.html` on the participant's phone,
+which decodes the URL, renders the constellation as a `<img>` (long-press to save on
+mobile), and shows credits. The link stays live indefinitely — participants can
+re-open it, share it, or forward it after the night.
 
-**Bugs found and fixed along the way** (each confirmed against a running instance,
-not just read-through): a header-reflow bug that made the whole map visibly jump the
-moment you selected an anchor; idle stations that were nearly invisible with no
-data yet; the rubber-band line continuing past the 10-station cap; a light-theme
-text color with a measured 2.16:1 contrast ratio (now 4.59:1, clears AA); the seed
-button promising to "rehearse the wall" while the bulletin engine silently ignored
-demo data; and a bulletin footer that would have reintroduced the jump bug if its
-height weren't locked independent of text length.
+**Bulletin visualizations.** Every bulletin the wall speaks is paired with a
+matched animation on the map: edge traverse for "heaviest link", node pulse for
+"busiest station", category glow for "heaviest line", cascade for "just now" and
+"went the distance", and so on. See `MapView.drawMotion` in `core.js`.
 
-## What's deliberately not done yet
+**Bulletin truthfulness.** Every stat the wall states has been audited: "longest
+journey" honestly says "one of the longest" when multiple paths tie; "went the
+distance" no longer implies "visited every station on the map"; "sole traveller"
+only fires when a path has every edge unique; "direction of travel" uses plurality
+language ("the most common anchor…") instead of majority language ("most of you").
 
-- **Cross-device sync.** Today's transport is `BroadcastChannel`, which only
-  reaches other tabs on the *same* browser, same device — enough to rehearse
-  alone, not enough for a tablet and a separate projection laptop. `Store`/`Sync`
-  are already shaped to receive a real backend; which one (Firebase, PocketBase on
-  Railway, a small Node+SSE server) is still an open decision, deferred on purpose
-  rather than guessed at.
-- **The live event's own network.** Independent of whichever backend gets wired in
-  for rehearsal, the actual Teder night should still run on a laptop acting as its
-  own local router — not venue wifi, not the public internet.
-- **From the original master document, not yet built:** the generative audio layer
-  (Tone.js chords keyed to each line), a physical thermal-printer receipt (today's
-  print is a browser print dialog, not real hardware), the QR/Instagram share, and
-  the closing before/after morph of the whole night's shape.
-- **Gravity currently bends the *arteries*, not the stations themselves** — a
-  deliberate legibility trade-off from early on. Worth revisiting once there's real
-  data to see whether station-drift would still read clearly.
-- **Three station names are still off-register:** Logic, Pragmatism, and
-  Observation are cognitive stances where the other 33 stations are felt states —
-  flagged early, never resolved.
-- **Nothing has touched real hardware yet.** Every check so far is a headless
-  browser plus numeric verification (pixel sampling, DOM measurement, contrast
-  ratios) — rigorous, but not the same as a hand on an actual iPad under actual
-  venue lighting.
+**Gradient path strokes.** Every artery — tablet draft, aggregate map, cast
+constellation, injection animation, cascade — transitions colour along its length
+from each station's line into the next. Draft line while a participant is casting
+picks up the current tip's colour on its rubber-band tail.
 
-## Next steps
+**Persistence at every layer.**
+- Every browser saves to `localStorage` on every mutation.
+- Cloud mode: Firebase Realtime DB is the durable log.
+- Local mode: `sync-log.jsonl` on disk is the durable log.
+- Settings has a one-click "Download as JSON" and a "Import from JSON" that
+  preserves each path's original seeded/real flag.
+- `archive.html` is a browsable gallery of every path in the current session,
+  each rendered as a thumbnail with a link to `view.html` for that path.
 
-- [ ] Decide the sync backend (Firebase / PocketBase+Railway / Node+SSE) and wire
-      it in behind the existing `Sync` interface
-- [ ] Push to GitHub, enable Pages, and once sync is wired in, test the tablet and
-      projection as two genuinely separate devices for the first time
-- [ ] Rehearse on real hardware — an actual tablet, actual projector, actual room
-      light — to sanity-check contrast, touch targets, and text size in person
-- [ ] Resolve Logic / Pragmatism / Observation, or confirm they stay
+**Self-hosted fonts.** Archivo and Martian Mono variable fonts live in
+`docs/assets/fonts/`. No Google Fonts CDN request. The whole app runs pixel-perfect
+offline.
+
+**Tablet as a locked kiosk.** Nav menu removed from `tablet.html` so participants
+can't wander into Settings or Projection. Only a small top-right corner theme
+toggle remains for the operator. Opening prompt rotates through six variants
+("Where are you right now?", "What state are you in tonight?", …) so returning
+participants don't see the identical question twice.
+
+**Layout robustness.**
+- Cast-receipt modal is `max-height: calc(100dvh - 40px)` with an internally
+  scrolling body and pinned foot — Print + Done buttons are always reachable no
+  matter the viewport orientation.
+- Settings collapses from two columns to one below 960 px viewport width.
+- Instructions on the tablet are centered and enlarged so participants actually
+  read them.
+
+**Print path unified with `view.html`.** Same header format, same stops list, same
+credits block. Print CSS neutralises the modal transform chain so content flows
+from page 1 top (no more blank half-page).
+
+**Credits.** `view.html` and the printed keepsake both credit *@unapaulogetic_* with
+a mobile-tappable Instagram link and "Democracy Week · Tel Aviv · 2026".
+
+## Where it stands — not built yet, deferred on purpose
+
+- **The generative audio layer** (Tone.js chords keyed to each line) — from the
+  original master document, still not built. Decide close to the event.
+- **Physical thermal-printer receipt** — the QR + view.html + save-image flow
+  covers the "take-home" need without hardware. Thermal is nice-to-have if you
+  want a physical artefact people can pin to a wall.
+- **Closing before/after morph** of the whole night's shape — not built.
+- **Three station names still off-register:** Logic, Pragmatism, Observation are
+  cognitive stances where the other 33 are felt states. Flagged early, not
+  resolved.
+- **Gravity currently bends the arteries, not the stations themselves** — a
+  deliberate legibility trade-off. Worth revisiting if there's ever visible drift
+  under real data.
+
+## Where it stands — untested
+
+- **Nothing has touched real Teder hardware yet.** Every check to date is a
+  headless browser + numeric verification. Real MacBook + real iPad + real
+  projector under real room light is the last unknown.
+- **Real concurrent load** on Firebase or on the Python relay. The free Firebase
+  tier tolerates 100 simultaneous connections and 10 GB/month transfer — a
+  packed night is well within limits, but not yet observed.
+- **The venue's own network** at Teder. Both sync paths (cloud over a phone
+  hotspot, or offline via `sync-server.py` + a phone hotspot providing only the
+  LAN) are ready; which one wins on the night depends on what actually works in
+  that basement.
+
+## Suggested next steps
+
+- [ ] Rehearse on real hardware — the actual MacBook + iPad + projector, under
+      real lighting. Verify touch targets, contrast, projection size, participant
+      flow.
+- [ ] Verify Galaxy hotspot at Teder — either on the actual location or somewhere
+      with comparable signal conditions. If cell signal is unreliable, plan for a
+      travel router or USB-Ethernet dongle as a hardware fallback.
+- [ ] Decide cold-start seeding for the actual event night — empty at 20:00, or
+      pre-seeded with a week of collected paths.
+- [ ] Load-test with rapid concurrent casts. Revisit whether one tablet is enough
+      for expected foot traffic, or whether the original plan for 2–3 kiosks
+      still holds.
+- [ ] Resolve Logic / Pragmatism / Observation, or confirm they stay as-is.
 - [ ] Decide whether to build the generative audio layer, the thermal-printer
-      receipt, and the closing morph, or leave them out of this iteration
-- [ ] Load-test with rapid concurrent casts once real sync exists — and revisit
-      whether one tablet is enough for expected foot traffic, or whether the
-      original plan for 2–3 kiosks is still the right call
-- [ ] Decide on cold-start seeding for the actual event night (empty at 20:00, or
-      pre-seeded with a week of collected paths, as originally discussed)
+      receipt, and the closing morph, or leave them out of this iteration.
+- [ ] Tighten Firebase security rules before the free 30-day test-mode window
+      expires (either flip to always-open or wire in Firebase Auth).
