@@ -548,38 +548,118 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
     });
   }
 
-  pts.forEach((n,i)=>{
-    const s=toS(n);
-    if(print){
-      // Anchor + destination filled pure black (strongest weight); intermediates
-      // filled in category-grey. Small stroke for definition.
+  if(print){
+    // ------- Print: two-pass rendering with greedy collision-aware labels -------
+    // Pass 1: draw every dot up front so they're background for the labels.
+    // Pass 2: place the station name labels one at a time, longest first, choosing
+    //         the highest-scoring candidate slot (below → above → right → left →
+    //         further-below → further-above). Score penalises overlaps with any
+    //         already-placed rect (dot, number, or previously placed label) plus
+    //         off-canvas clipping. This is a print-simplified port of MapView's
+    //         labelMetrics greedy placer.
+    const NAME_FS = 10, NUM_FS = 9, DOT_CLEAR = 6, LINE_H = NAME_FS + 3;
+
+    // Draw the dots.
+    pts.forEach((n,i)=>{
+      const s = toS(n);
       const isEnd = i===0 || i===pts.length-1;
       const rad = isEnd ? 4.5 : 3.2;
-      const dotGray = catColor(n.c, "print");
-      ctx.beginPath(); ctx.arc(s.x,s.y,rad,0,7);
-      ctx.fillStyle = isEnd ? "#000" : dotGray; ctx.fill();
+      ctx.beginPath(); ctx.arc(s.x, s.y, rad, 0, 7);
+      ctx.fillStyle = isEnd ? "#000" : catColor(n.c, "print");
+      ctx.fill();
+    });
 
-      // Numbered label above (secondary — medium grey)
-      ctx.font=`700 9px 'Martian Mono',monospace`;
-      ctx.fillStyle = ink3;
-      ctx.textAlign="center";
-      ctx.fillText(String(i+1), s.x, s.y-9);
+    // Measure numbered label rects (fixed positions above each dot) and dot rects
+    // — these get added to the "already placed" set so name labels avoid them.
+    ctx.font = `700 ${NUM_FS}px 'Martian Mono',monospace`;
+    const numRects = pts.map((n,i)=>{
+      const s = toS(n);
+      const nw = ctx.measureText(String(i+1)).width;
+      return {x0: s.x - nw/2 - 1, x1: s.x + nw/2 + 1,
+              y0: s.y - DOT_CLEAR - NUM_FS - 2, y1: s.y - DOT_CLEAR + 2};
+    });
+    const dotRects = pts.map((n,i)=>{
+      const s = toS(n);
+      const rad = (i===0||i===pts.length-1) ? 5 : 4;
+      return {x0: s.x - rad, x1: s.x + rad, y0: s.y - rad, y1: s.y + rad};
+    });
 
-      // Station name below — CLAMPED so no letter falls off the canvas edge.
-      // measureText tells us the label's width; if the centered position would
-      // put its left or right edge past the canvas, we shift it inward.
-      const label = n.n.toUpperCase();
-      ctx.font=`700 10px 'Martian Mono',monospace`;
-      ctx.fillStyle = "#000";
-      const tw = ctx.measureText(label).width;
-      let lx = s.x, align = "center";
-      const pad = 2;
-      if(s.x - tw/2 < pad){ align = "left";  lx = pad; }
-      else if(s.x + tw/2 > cssW - pad){ align = "right"; lx = cssW - pad; }
-      ctx.textAlign = align;
-      ctx.fillText(label, lx, s.y+14);
-      return;
+    // Measure each station name at its display size.
+    ctx.font = `700 ${NAME_FS}px 'Martian Mono',monospace`;
+    const labels = pts.map((n,i)=>{
+      const s = toS(n);
+      return {s, label: n.n.toUpperCase(), tw: ctx.measureText(n.n.toUpperCase()).width, i};
+    });
+
+    // Candidate positions (dy is where the top of the text sits). Order matters —
+    // the first-preferred candidate wins ties. Below-center is the default.
+    const CAND = [
+      {dx: 0,          dy:  DOT_CLEAR + 2,               al:"center"},   // below
+      {dx: 0,          dy: -DOT_CLEAR - NUM_FS - LINE_H, al:"center"},   // above (over the number)
+      {dx:  DOT_CLEAR, dy: -NAME_FS/2 + 1,               al:"left"  },   // right of the dot
+      {dx: -DOT_CLEAR, dy: -NAME_FS/2 + 1,               al:"right" },   // left of the dot
+      {dx: 0,          dy:  DOT_CLEAR + 2 + LINE_H,      al:"center"},   // 2 lines below
+      {dx: 0,          dy: -DOT_CLEAR - NUM_FS - LINE_H*2, al:"center"}, // 2 lines above
+    ];
+    const rectFor = (ls, c) => {
+      const ly = ls.s.y + c.dy;
+      let lx;
+      if(c.al === "center")    lx = ls.s.x - ls.tw/2;
+      else if(c.al === "left") lx = ls.s.x + c.dx;
+      else /* right */         lx = ls.s.x + c.dx - ls.tw;
+      return {x0: lx, x1: lx + ls.tw, y0: ly - 1, y1: ly + NAME_FS + 1, lx, ly};
+    };
+
+    const placed = [...dotRects, ...numRects];
+    const finalPos = new Array(labels.length);
+
+    // Greedy: place hardest labels first (widest) so short labels can slot around them.
+    const order = labels.map((_,i)=>i).sort((a,b)=>labels[b].tw - labels[a].tw);
+    for(const idx of order){
+      const ls = labels[idx];
+      let best = null, bestScore = -Infinity;
+      for(let ci=0; ci<CAND.length; ci++){
+        let r = rectFor(ls, CAND[ci]);
+        // Horizontal clamp — if a candidate would slide off the canvas, shift it in.
+        // This preserves the vertical slot (below/above/etc) while keeping the label visible.
+        if(r.x0 < 1){ const d = 1 - r.x0; r = {...r, lx: r.lx + d, x0: 1, x1: r.x1 + d}; }
+        if(r.x1 > cssW - 1){ const d = r.x1 - (cssW - 1); r = {...r, lx: r.lx - d, x0: r.x0 - d, x1: cssW - 1}; }
+        let hits = 0;
+        for(const p of placed){
+          if(r.x0 < p.x1 && p.x0 < r.x1 && r.y0 < p.y1 && p.y0 < r.y1) hits++;
+        }
+        const yClipped = (r.y0 < 0 || r.y1 > cssH) ? 1 : 0;
+        const score = -hits*100 - yClipped*30 - ci;
+        if(score > bestScore){ bestScore = score; best = r; }
+      }
+      finalPos[idx] = best;
+      placed.push({x0: best.x0, x1: best.x1, y0: best.y0, y1: best.y1});
     }
+
+    // Draw the numbers (centered above each dot — always-placed positions).
+    ctx.font = `700 ${NUM_FS}px 'Martian Mono',monospace`;
+    ctx.fillStyle = ink3;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    pts.forEach((n,i)=>{
+      const s = toS(n);
+      ctx.fillText(String(i+1), s.x, s.y - DOT_CLEAR - 1);
+    });
+
+    // Draw the station name labels at their final positions.
+    ctx.font = `700 ${NAME_FS}px 'Martian Mono',monospace`;
+    ctx.fillStyle = "#000";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    labels.forEach((ls,i)=>{
+      const pos = finalPos[i];
+      ctx.fillText(ls.label, pos.lx, pos.ly);
+    });
+    return;
+  }
+
+  pts.forEach((n,i)=>{
+    const s=toS(n);
     const col=catColor(n.c,theme);
     ctx.beginPath(); ctx.arc(s.x,s.y,i===0||i===pts.length-1?7:5,0,7);
     ctx.fillStyle= i===0 ? col : bg; ctx.fill();
