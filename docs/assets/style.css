@@ -209,40 +209,68 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 @media print{ .credits{color:#333} .credits b{color:#111} .credits a{color:#111} }
 
 /* -------- print --------
-   The old rules used position:fixed;inset:0 on .print-area, but .modal has a
-   transform on it (translateY+scale for the entrance animation) — a transform
-   makes the modal a *containing block* for fixed-position descendants, so
-   .print-area was fixed relative to the (centered) modal, not the page. Result:
-   half the page was blank. Fix: neutralize the transform + centering flex chain
-   in print, and let .print-area flow as normal block content from the top of
-   the first page. */
+   Tuned for 80mm POS thermal receipt paper (~72mm printable width). The @page
+   size declaration is what makes the browser lay out for the narrow strip
+   instead of trying to fit A4/Letter into 72mm and either scaling or clipping.
+   All font sizes are in pt so the browser doesn't reflow relative to viewport.
+   The keepsake block (QR + URL) is stacked vertically because 72mm is too
+   narrow for the side-by-side layout used on screen.
+   ---
+   ALSO — the modal has a CSS transform on it (translateY+scale entrance
+   animation). A transform makes the modal a *containing block* for any
+   fixed-position descendants, so the old print rules that used position:fixed
+   on .print-area were fixed to the (centered) modal, not the page. Result:
+   half the page was blank. The fix: neutralize the transform + centering flex
+   chain in print, and let .print-area flow as normal block content. */
 @media print{
-  html,body{background:#fff;color:#111;overflow:visible;height:auto}
-  @page{margin:14mm}
+  @page{ size: 72mm auto; margin: 3mm; }
+  html,body{background:#fff;color:#111;overflow:visible;height:auto;margin:0;padding:0}
   body *{visibility:hidden}
   .modal-veil{position:static!important;display:block!important;padding:0!important;
     background:none!important;opacity:1!important;pointer-events:auto!important}
   .modal{position:static!important;transform:none!important;box-shadow:none!important;
-    width:auto!important;max-width:none!important;background:none!important}
-  .modal-foot{display:none!important}
-  .modal-list{display:none!important}
-  .stub-meta{display:none!important}
+    width:auto!important;max-width:100%!important;max-height:none!important;
+    background:none!important;display:block!important}
+  .modal-foot, .modal-list, .stub-meta{display:none!important}
   .print-area{position:static!important;padding:0!important;background:#fff;color:#111;
-    visibility:hidden}
+    visibility:hidden;overflow:visible!important}
   .print-area *{visibility:visible}
   .print-area canvas, .print-area svg{filter:none}
-  .constellation-wrap{height:120mm!important;margin:6mm 0!important;box-shadow:none!important;
-    border:1px solid #ddd}
-  .modal-head{padding:0!important}
-  .modal-head h3{font-size:22pt;color:#111}
-  .modal-head p{color:#555}
-  /* keepsake block: shown in print, with the QR — the printed version is another
-     way for the participant to reach view.html later. */
-  .keepsake{margin:6mm 0 0 0!important;box-shadow:none!important;padding:6mm 0 0!important;
-    border-top:1px solid #ddd}
-  .keepsake canvas{background:#fff}
-  .keepsake-text p, .keepsake-url{color:#333}
-  .print-credits{display:block!important}
+
+  /* Header — small, tight, centered. h3 was 22pt (~40mm wide at that size),
+     it now fits comfortably in 66mm of printable width. */
+  .modal-head{padding:0!important;text-align:center}
+  .modal-head h3{font-size:13pt;color:#111;margin:0 0 1mm 0;line-height:1.1;
+    letter-spacing:-.01em}
+  .modal-head p{font-size:7.5pt;color:#444;margin:0;line-height:1.3;letter-spacing:0}
+
+  /* Constellation — sized in mm so the aspect ratio is stable across print
+     targets. Thermal printers are typically 203 DPI; 66×55mm becomes ~528×440
+     dots, which is enough resolution for the dot pattern to read cleanly. */
+  .constellation-wrap{height:55mm!important;margin:3mm 0!important;
+    box-shadow:none!important;border:1px solid #ccc}
+  .constellation-wrap canvas{width:100%!important;height:100%!important}
+
+  /* Keepsake stacked — QR centered above the text so both fit inside 72mm. */
+  .keepsake{margin:3mm 0!important;padding:3mm 0 0!important;box-shadow:none!important;
+    border-top:1px solid #ccc;display:block!important;text-align:center}
+  .keepsake canvas{background:#fff!important;display:block!important;
+    width:36mm!important;height:36mm!important;margin:0 auto 2mm!important;padding:0!important}
+  .keepsake-text{width:100%}
+  .keepsake-text .eyebrow{font-size:6.5pt;letter-spacing:.15em;color:#555;margin-bottom:1mm}
+  .keepsake-text p{font-size:7.5pt;color:#333;margin:0 0 1mm 0;line-height:1.35}
+  .keepsake-url{font-size:6pt;color:#444;word-break:break-all;line-height:1.2;
+    display:block;margin-top:1mm}
+
+  /* Print credits — small block at the bottom. Rows stacked vertically since
+     they'd never fit as a two-column layout at this width. */
+  .print-credits{display:block!important;margin-top:3mm!important;padding-top:2mm!important;
+    border-top:1px dashed #999!important;text-align:center}
+  .print-credits .row{display:block!important;margin-bottom:0.5mm!important;
+    font-size:6.5pt;line-height:1.4;color:#333;overflow-wrap:anywhere}
+  .print-credits .row span, .print-credits .row a{overflow-wrap:anywhere}
+  .print-credits b{color:#111;font-weight:600}
+  .print-credits a{color:#111;text-decoration:none}
 }
 
 /* ---------- VJ ---------- */

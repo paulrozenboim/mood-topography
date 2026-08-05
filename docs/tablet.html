@@ -208,14 +208,27 @@ const mPrintDate=document.getElementById("mPrintDate");
 let lastCastIds=null;                              // captured for onbeforeprint
 
 // The canvas is drawn to whatever CSS size it had at cast time; when the browser
-// switches to print media the constellation-wrap grows and the canvas becomes a
-// stretched bitmap. Redraw at the new size so print gets crisp geometry.
+// switches to print media the constellation-wrap resizes (to 66×55mm for thermal
+// receipt paper) and the canvas would become a stretched bitmap. Redraw at the
+// new size so print gets crisp geometry.
+// Timing gotcha: browsers disagree on when beforeprint fires relative to the
+// media-query switch. Chrome fires it AFTER print styles apply (canvas parent
+// already at print size, one draw is enough). Safari and some Firefox versions
+// fire it BEFORE, so the parent still reports screen size. We handle both:
+// (1) a matchMedia('print') listener that fires exactly when print styles apply,
+// (2) beforeprint itself with a rAF-deferred draw as a belt-and-braces backup.
+const redrawForCurrentSize = () => {
+  if(lastCastIds && lastCastIds.length) renderConstellation(star, lastCastIds, Store.theme.tablet);
+};
 window.addEventListener("beforeprint", ()=>{
-  if(lastCastIds && lastCastIds.length) renderConstellation(star, lastCastIds, Store.theme.tablet);
+  redrawForCurrentSize();
+  // rAF gives the browser a beat to apply print styles if it hasn't yet
+  requestAnimationFrame(redrawForCurrentSize);
 });
-window.addEventListener("afterprint", ()=>{
-  if(lastCastIds && lastCastIds.length) renderConstellation(star, lastCastIds, Store.theme.tablet);
-});
+window.addEventListener("afterprint", redrawForCurrentSize);
+try{
+  matchMedia("print").addEventListener("change", e => { if(e.matches) redrawForCurrentSize() });
+}catch(_){}                                            // pre-2020 Safari doesn't support addEventListener on MQL
 
 const drawConstellation=(ids)=> renderConstellation(star, ids, Store.theme.tablet);
 
