@@ -261,9 +261,16 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   .constellation-wrap canvas{width:100%!important;height:auto!important;display:block!important}
 
   /* Keepsake — QR only. The "TAKE IT WITH YOU" eyebrow, the description
-     paragraph, and the raw URL text are all hidden per the receipt spec. */
+     paragraph, and the raw URL text are all hidden per the receipt spec.
+     ---
+     Deliberately DO NOT force display here. tablet.html sets inline
+     display:none in openPreview() (no QR generated yet) and display:flex in
+     castNow() (QR ready). Forcing display:block in print used to override the
+     display:none, printing an empty QR placeholder as a ~40mm blank rectangle
+     between the constellation and the credits — the whitespace the user kept
+     seeing was the empty QR canvas, not real margin. */
   .keepsake{margin:2mm 0!important;padding:0!important;box-shadow:none!important;
-    border:none!important;display:block!important;text-align:center}
+    border:none!important;text-align:center;justify-content:center}
   .keepsake canvas{background:#fff!important;display:block!important;
     width:32mm!important;height:32mm!important;margin:0 auto!important;padding:0!important}
   .keepsake-text{display:none!important}
