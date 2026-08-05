@@ -473,43 +473,77 @@ function strokeGradientPath(ctx, sp, catCodes, theme, opts={}){
    canvas's parent, reads its own theme tokens off :root so it always matches
    the surrounding page. Pure — never touches Store.
    ============================================================ */
-function renderConstellation(canvas, nodeIds, theme){
+function renderConstellation(canvas, nodeIds, theme, opts={}){
   if(!nodeIds || !nodeIds.length) return;
-  const dark = theme==="dark";
+  const print = !!opts.print;
+  // Print mode ignores the theme and always uses pure black on white — thermal
+  // printers can't reliably do grays, so anything less than #000 comes out as
+  // faint dithered noise. Everything is drawn at higher DPR (3x) so the bitmap
+  // stays crisp when the browser resamples to the printer's 203 DPI.
+  const dark = print ? false : theme==="dark";
   const ctx = canvas.getContext("2d");
   const r = canvas.parentElement.getBoundingClientRect();
-  const dpr = Math.min(devicePixelRatio||1, 2);
+  const dpr = print ? 3 : Math.min(devicePixelRatio||1, 2);
   canvas.width = r.width*dpr; canvas.height = r.height*dpr;
   ctx.setTransform(dpr,0,0,dpr,0,0);
   const rs = getComputedStyle(document.documentElement);
-  const bg  = rs.getPropertyValue("--bg-2").trim();
-  const ink = rs.getPropertyValue("--ink").trim();
-  const ink3= rs.getPropertyValue("--ink-3").trim();
+  const bg  = print ? "#ffffff" : rs.getPropertyValue("--bg-2").trim();
+  const ink = print ? "#000000" : rs.getPropertyValue("--ink").trim();
+  const ink3= print ? "#000000" : rs.getPropertyValue("--ink-3").trim();
   ctx.fillStyle=bg; ctx.fillRect(0,0,r.width,r.height);
 
   const pts=nodeIds.map(i=>NODES[i]);
   const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
-  const bx0=Math.min(...xs)-90, bx1=Math.max(...xs)+90, by0=Math.min(...ys)-90, by1=Math.max(...ys)+90;
+  // Tighter world-space padding for print so the drawing fills the wrap instead
+  // of centering with 1cm+ of white space top and bottom on wide paths.
+  const worldPad = print ? 40 : 90;
+  const bx0=Math.min(...xs)-worldPad, bx1=Math.max(...xs)+worldPad,
+        by0=Math.min(...ys)-worldPad, by1=Math.max(...ys)+worldPad;
   const k=Math.min(r.width/(bx1-bx0), r.height/(by1-by0));
   const ox=(r.width-(bx1-bx0)*k)/2 - bx0*k, oy=(r.height-(by1-by0)*k)/2 - by0*k;
   const toS=p=>({x:p.x*k+ox, y:p.y*k+oy});
 
-  ctx.save(); ctx.globalAlpha=dark?.5:.35;
-  let sr=1234567;
-  const rnd=()=>{sr=(sr*1103515245+12345)&0x7fffffff; return sr/0x7fffffff};
-  for(let i=0;i<60;i++){
-    ctx.beginPath(); ctx.arc(rnd()*r.width, rnd()*r.height, rnd()*1.1+0.3, 0, 7);
-    ctx.fillStyle=dark?"#8B939C":"#9AA2A7"; ctx.fill();
+  // Starfield is decorative and adds only visual noise on thermal paper. Skip.
+  if(!print){
+    ctx.save(); ctx.globalAlpha=dark?.5:.35;
+    let sr=1234567;
+    const rnd=()=>{sr=(sr*1103515245+12345)&0x7fffffff; return sr/0x7fffffff};
+    for(let i=0;i<60;i++){
+      ctx.beginPath(); ctx.arc(rnd()*r.width, rnd()*r.height, rnd()*1.1+0.3, 0, 7);
+      ctx.fillStyle=dark?"#8B939C":"#9AA2A7"; ctx.fill();
+    }
+    ctx.restore();
   }
-  ctx.restore();
 
   const sp=splinePoints(pts.map(p=>({x:p.x,y:p.y})), null).map(toS);
-  strokeGradientPath(ctx, sp, pts.map(p=>p.c), theme, {
-    lineWidth:2.6, alpha:.9, composite: dark?"lighter":"multiply"
-  });
+  if(print){
+    // Single pure-black stroke; skip gradients + composite modes entirely.
+    ctx.save();
+    ctx.strokeStyle="#000"; ctx.lineWidth=2.6; ctx.lineCap="round"; ctx.lineJoin="round";
+    ctx.beginPath(); sp.forEach((q,i)=> i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));
+    ctx.stroke(); ctx.restore();
+  } else {
+    strokeGradientPath(ctx, sp, pts.map(p=>p.c), theme, {
+      lineWidth:2.6, alpha:.9, composite: dark?"lighter":"multiply"
+    });
+  }
 
   pts.forEach((n,i)=>{
-    const s=toS(n), col=catColor(n.c,theme);
+    const s=toS(n);
+    if(print){
+      // Solid black filled dots — larger at start/end so the direction reads
+      // even without color cues.
+      const rad = (i===0||i===pts.length-1) ? 5 : 3.5;
+      ctx.beginPath(); ctx.arc(s.x,s.y,rad,0,7);
+      ctx.fillStyle="#000"; ctx.fill();
+      ctx.font=`700 9px 'Martian Mono',monospace`;
+      ctx.fillStyle="#000"; ctx.textAlign="center";
+      ctx.fillText(String(i+1), s.x, s.y-11);
+      ctx.font=`700 10px 'Martian Mono',monospace`;
+      ctx.fillText(n.n.toUpperCase(), s.x, s.y+15);
+      return;
+    }
+    const col=catColor(n.c,theme);
     ctx.beginPath(); ctx.arc(s.x,s.y,i===0||i===pts.length-1?7:5,0,7);
     ctx.fillStyle= i===0 ? col : bg; ctx.fill();
     ctx.lineWidth=1.8; ctx.strokeStyle=col; ctx.stroke();

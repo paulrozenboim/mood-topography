@@ -59,9 +59,10 @@
         </div>
       </div>
       <div class="print-credits credits" aria-hidden="true">
-        <div class="row"><b>The Topography of Us</b><span>Democracy Week · Tel Aviv · 2026</span></div>
-        <div class="row"><span>Cast at Teder</span><span id="mPrintDate"></span></div>
-        <div class="row"><span>Made by <b>@unapaulogetic_</b></span><span>instagram.com/unapaulogetic_</span></div>
+        <div class="row"><b>The Topography of Us</b></div>
+        <div class="row">Democracy Week · Tel Aviv · 2026</div>
+        <div class="row">Cast at Teder · <span id="mPrintDate"></span></div>
+        <div class="row">Made by <b>@unapaulogetic_</b></div>
       </div>
     </div>
     <div class="modal-foot" id="mFoot"></div>
@@ -217,23 +218,28 @@ let lastCastIds=null;                              // captured for onbeforeprint
 // fire it BEFORE, so the parent still reports screen size. We handle both:
 // (1) a matchMedia('print') listener that fires exactly when print styles apply,
 // (2) beforeprint itself with a rAF-deferred draw as a belt-and-braces backup.
-const redrawForCurrentSize = () => {
-  if(lastCastIds && lastCastIds.length) renderConstellation(star, lastCastIds, Store.theme.tablet);
+const redrawForCurrentSize = (print=false) => {
+  if(lastCastIds && lastCastIds.length){
+    renderConstellation(star, lastCastIds, Store.theme.tablet, print ? {print:true} : {});
+  }
 };
 window.addEventListener("beforeprint", ()=>{
-  redrawForCurrentSize();
+  redrawForCurrentSize(true);
   // rAF gives the browser a beat to apply print styles if it hasn't yet
-  requestAnimationFrame(redrawForCurrentSize);
+  requestAnimationFrame(()=>redrawForCurrentSize(true));
 });
-window.addEventListener("afterprint", redrawForCurrentSize);
+window.addEventListener("afterprint", ()=>redrawForCurrentSize(false));
 try{
-  matchMedia("print").addEventListener("change", e => { if(e.matches) redrawForCurrentSize() });
+  matchMedia("print").addEventListener("change", e => { redrawForCurrentSize(e.matches) });
 }catch(_){}                                            // pre-2020 Safari doesn't support addEventListener on MQL
 
 const drawConstellation=(ids)=> renderConstellation(star, ids, Store.theme.tablet);
 
 function openPreview(){
   const ns=view.draft.nodes.slice();
+  // Track the current path even before cast, so a Print from preview reruns
+  // renderConstellation in print mode instead of stretching a screen bitmap.
+  lastCastIds = ns.slice();
   mHead.textContent="Your constellation";
   mSub.textContent=`${ns.length} stations, in order. This is what joins the wall.`;
   mMeta.style.display="none";

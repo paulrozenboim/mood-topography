@@ -224,7 +224,12 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
    chain in print, and let .print-area flow as normal block content. */
 @media print{
   @page{ size: 72mm auto; margin: 3mm; }
-  html,body{background:#fff;color:#111;overflow:visible;height:auto;margin:0;padding:0}
+  html,body{background:#fff;color:#000;overflow:visible;height:auto;margin:0;padding:0}
+  /* Force pure black on every printable element — thermal heads can't reliably
+     print grays; every non-black colour ends up as faint dithered noise. The
+     one exception is the constellation stroke, which renderConstellation draws
+     as pure #000 in print mode. */
+  .print-area *{color:#000!important}
   body *{visibility:hidden}
   .modal-veil{position:static!important;display:block!important;padding:0!important;
     background:none!important;opacity:1!important;pointer-events:auto!important}
@@ -232,45 +237,38 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     width:auto!important;max-width:100%!important;max-height:none!important;
     background:none!important;display:block!important}
   .modal-foot, .modal-list, .stub-meta{display:none!important}
-  .print-area{position:static!important;padding:0!important;background:#fff;color:#111;
+  .print-area{position:static!important;padding:0!important;background:#fff;
     visibility:hidden;overflow:visible!important}
   .print-area *{visibility:visible}
   .print-area canvas, .print-area svg{filter:none}
 
-  /* Header — small, tight, centered. h3 was 22pt (~40mm wide at that size),
-     it now fits comfortably in 66mm of printable width. */
+  /* Header — title only. Subtitle ("N stations, in order…") hidden for the
+     minimal receipt the user asked for. */
   .modal-head{padding:0!important;text-align:center}
-  .modal-head h3{font-size:13pt;color:#111;margin:0 0 1mm 0;line-height:1.1;
-    letter-spacing:-.01em}
-  .modal-head p{font-size:7.5pt;color:#444;margin:0;line-height:1.3;letter-spacing:0}
+  .modal-head h3{font-size:14pt;margin:0 0 2mm 0;line-height:1.1;letter-spacing:-.01em;
+    font-weight:800}
+  .modal-head p{display:none!important}
 
-  /* Constellation — sized in mm so the aspect ratio is stable across print
-     targets. Thermal printers are typically 203 DPI; 66×55mm becomes ~528×440
-     dots, which is enough resolution for the dot pattern to read cleanly. */
-  .constellation-wrap{height:55mm!important;margin:3mm 0!important;
-    box-shadow:none!important;border:1px solid #ccc}
+  /* Constellation — no visible border, tighter height, drawn by renderConstellation
+     in print mode: pure black lines/dots/labels at 3x DPR for thermal sharpness. */
+  .constellation-wrap{height:45mm!important;margin:2mm 0 3mm 0!important;
+    box-shadow:none!important;border:none!important;background:#fff!important}
   .constellation-wrap canvas{width:100%!important;height:100%!important}
 
-  /* Keepsake stacked — QR centered above the text so both fit inside 72mm. */
-  .keepsake{margin:3mm 0!important;padding:3mm 0 0!important;box-shadow:none!important;
-    border-top:1px solid #ccc;display:block!important;text-align:center}
+  /* Keepsake — QR only. The "TAKE IT WITH YOU" eyebrow, the description
+     paragraph, and the raw URL text are all hidden per the receipt spec. */
+  .keepsake{margin:2mm 0!important;padding:0!important;box-shadow:none!important;
+    border:none!important;display:block!important;text-align:center}
   .keepsake canvas{background:#fff!important;display:block!important;
-    width:36mm!important;height:36mm!important;margin:0 auto 2mm!important;padding:0!important}
-  .keepsake-text{width:100%}
-  .keepsake-text .eyebrow{font-size:6.5pt;letter-spacing:.15em;color:#555;margin-bottom:1mm}
-  .keepsake-text p{font-size:7.5pt;color:#333;margin:0 0 1mm 0;line-height:1.35}
-  .keepsake-url{font-size:6pt;color:#444;word-break:break-all;line-height:1.2;
-    display:block;margin-top:1mm}
+    width:32mm!important;height:32mm!important;margin:0 auto!important;padding:0!important}
+  .keepsake-text{display:none!important}
 
-  /* Print credits — small block at the bottom. Rows stacked vertically since
-     they'd never fit as a two-column layout at this width. */
+  /* Credits — one line per row, no IG URL. Small dashed separator above. */
   .print-credits{display:block!important;margin-top:3mm!important;padding-top:2mm!important;
-    border-top:1px dashed #999!important;text-align:center}
-  .print-credits .row{display:block!important;margin-bottom:0.5mm!important;
-    font-size:6.5pt;line-height:1.4;color:#333;overflow-wrap:anywhere}
-  .print-credits .row span, .print-credits .row a{overflow-wrap:anywhere}
-  .print-credits b{color:#111;font-weight:600}
-  .print-credits a{color:#111;text-decoration:none}
+    border-top:1px dashed #000!important;text-align:center}
+  .print-credits .row{display:block!important;margin-bottom:0.6mm!important;
+    font-size:7pt;line-height:1.4;overflow-wrap:anywhere}
+  .print-credits b{font-weight:700}
 }
 
 /* ---------- VJ ---------- */
