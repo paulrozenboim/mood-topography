@@ -4,9 +4,12 @@ scratchpad/
 .DS_Store
 Thumbs.db
 
+# v1/v2/v3 are earlier iterations, v4 (now archive/v4) was the pre-docs staging
+# copy. docs/ is the only version shipped and edited going forward.
 v1/
 v2/
 v3/
+archive/
 
 # Local sync-server's durable archive — event data, per-machine, do not publish
 sync-log.jsonl

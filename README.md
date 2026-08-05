@@ -71,11 +71,11 @@ plate — verified collision-free from a phone screen up to a 1440p projector.
 
 ## Working copies
 
-- `docs/` is what GitHub Pages serves — the live version.
-- `v4/` is the current development mirror. Edits go here first, then `robocopy` (or
-  equivalent) syncs into `docs/` before pushing.
-- `v1/`, `v2/`, `v3/` are earlier iterations, gitignored — kept locally as
-  reference, not shipped.
+- `docs/` is what GitHub Pages serves — and the only version edited going forward.
+  All development happens here directly; no more staging + sync step.
+- `archive/` holds `v4/` (the previous staging copy, kept as a historical
+  snapshot) and any future frozen iterations. Gitignored.
+- `v1/`, `v2/`, `v3/` are the earliest iterations, also gitignored.
 
 ## Status + next steps
 

@@ -12,7 +12,14 @@ const CATS = {
   M:{name:"Momentum & Vision",       color:"#F2A007"}
 };
 const CATS_LIGHT = {F:"#C42B18", R:"#2A42A6", C:"#00785A", M:"#C47A00"};
-const catColor = (c,theme)=> theme==="light" ? CATS_LIGHT[c] : CATS[c].color;
+// Grayscale palette for print — thermal printers dither greys cleanly, and
+// distinct values per line preserve some of the on-screen visual variation
+// without pretending it's colour.
+const CATS_PRINT = {F:"#1e1e1e", R:"#3d3d3d", C:"#5a5a5a", M:"#2d2d2d"};
+const catColor = (c,theme)=>
+  theme==="print" ? CATS_PRINT[c] :
+  theme==="light" ? CATS_LIGHT[c] :
+  CATS[c].color;
 
 // Solved by relax2.js: each of the four lines fills its own region of the field with a
 // real gutter between quadrants, semantic bridges pull related stations toward each other,
@@ -476,52 +483,65 @@ function strokeGradientPath(ctx, sp, catCodes, theme, opts={}){
 function renderConstellation(canvas, nodeIds, theme, opts={}){
   if(!nodeIds || !nodeIds.length) return;
   const print = !!opts.print;
-  // Print mode ignores the theme and always uses pure black on white — thermal
-  // printers can't reliably do grays, so anything less than #000 comes out as
-  // faint dithered noise. Everything is drawn at higher DPR (3x) so the bitmap
-  // stays crisp when the browser resamples to the printer's 203 DPI.
   const dark = print ? false : theme==="dark";
   const ctx = canvas.getContext("2d");
-  const r = canvas.parentElement.getBoundingClientRect();
+  const parent = canvas.parentElement;
+  const r = parent.getBoundingClientRect();
   const dpr = print ? 3 : Math.min(devicePixelRatio||1, 2);
-  canvas.width = r.width*dpr; canvas.height = r.height*dpr;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
   const rs = getComputedStyle(document.documentElement);
   const bg  = print ? "#ffffff" : rs.getPropertyValue("--bg-2").trim();
   const ink = print ? "#000000" : rs.getPropertyValue("--ink").trim();
-  const ink3= print ? "#000000" : rs.getPropertyValue("--ink-3").trim();
-  ctx.fillStyle=bg; ctx.fillRect(0,0,r.width,r.height);
+  const ink3= print ? "#666666" : rs.getPropertyValue("--ink-3").trim();
 
   const pts=nodeIds.map(i=>NODES[i]);
   const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
-  // Tighter world-space padding for print so the drawing fills the wrap instead
-  // of centering with 1cm+ of white space top and bottom on wide paths.
-  const worldPad = print ? 40 : 90;
+  const worldPad = print ? 60 : 90;
   const bx0=Math.min(...xs)-worldPad, bx1=Math.max(...xs)+worldPad,
         by0=Math.min(...ys)-worldPad, by1=Math.max(...ys)+worldPad;
-  const k=Math.min(r.width/(bx1-bx0), r.height/(by1-by0));
-  const ox=(r.width-(bx1-bx0)*k)/2 - bx0*k, oy=(r.height-(by1-by0)*k)/2 - by0*k;
+  const worldW = bx1-bx0, worldH = by1-by0;
+
+  // Print: canvas fills parent width and its HEIGHT auto-derives from the
+  // drawing's aspect ratio — no letterboxing above/below wide paths.
+  // Screen: canvas fills the wrap in both dimensions (drawing centers inside).
+  let cssW, cssH, k, ox, oy;
+  if(print){
+    cssW = r.width;
+    k = cssW / worldW;
+    cssH = worldH * k;
+    ox = -bx0 * k;
+    oy = -by0 * k;
+    canvas.style.width = cssW + "px";
+    canvas.style.height = cssH + "px";
+  } else {
+    cssW = r.width; cssH = r.height;
+    k = Math.min(r.width/worldW, r.height/worldH);
+    ox = (r.width - worldW*k)/2 - bx0*k;
+    oy = (r.height - worldH*k)/2 - by0*k;
+    canvas.style.width = ""; canvas.style.height = "";
+  }
+  canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle=bg; ctx.fillRect(0,0,cssW,cssH);
   const toS=p=>({x:p.x*k+ox, y:p.y*k+oy});
 
-  // Starfield is decorative and adds only visual noise on thermal paper. Skip.
+  // Starfield only on screen — adds visual noise on thermal paper.
   if(!print){
     ctx.save(); ctx.globalAlpha=dark?.5:.35;
     let sr=1234567;
     const rnd=()=>{sr=(sr*1103515245+12345)&0x7fffffff; return sr/0x7fffffff};
     for(let i=0;i<60;i++){
-      ctx.beginPath(); ctx.arc(rnd()*r.width, rnd()*r.height, rnd()*1.1+0.3, 0, 7);
+      ctx.beginPath(); ctx.arc(rnd()*cssW, rnd()*cssH, rnd()*1.1+0.3, 0, 7);
       ctx.fillStyle=dark?"#8B939C":"#9AA2A7"; ctx.fill();
     }
     ctx.restore();
   }
 
   const sp=splinePoints(pts.map(p=>({x:p.x,y:p.y})), null).map(toS);
+  // Both modes use the gradient helper — in print, theme="print" pulls from the
+  // CATS_PRINT grayscale palette so the stroke still has line-to-line variation
+  // (dark → medium → dark grey) instead of a flat black line.
   if(print){
-    // Single pure-black stroke; skip gradients + composite modes entirely.
-    ctx.save();
-    ctx.strokeStyle="#000"; ctx.lineWidth=2.6; ctx.lineCap="round"; ctx.lineJoin="round";
-    ctx.beginPath(); sp.forEach((q,i)=> i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));
-    ctx.stroke(); ctx.restore();
+    strokeGradientPath(ctx, sp, pts.map(p=>p.c), "print", {lineWidth:2.4, alpha:1});
   } else {
     strokeGradientPath(ctx, sp, pts.map(p=>p.c), theme, {
       lineWidth:2.6, alpha:.9, composite: dark?"lighter":"multiply"
@@ -531,16 +551,33 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
   pts.forEach((n,i)=>{
     const s=toS(n);
     if(print){
-      // Solid black filled dots — larger at start/end so the direction reads
-      // even without color cues.
-      const rad = (i===0||i===pts.length-1) ? 5 : 3.5;
+      // Anchor + destination filled pure black (strongest weight); intermediates
+      // filled in category-grey. Small stroke for definition.
+      const isEnd = i===0 || i===pts.length-1;
+      const rad = isEnd ? 4.5 : 3.2;
+      const dotGray = catColor(n.c, "print");
       ctx.beginPath(); ctx.arc(s.x,s.y,rad,0,7);
-      ctx.fillStyle="#000"; ctx.fill();
+      ctx.fillStyle = isEnd ? "#000" : dotGray; ctx.fill();
+
+      // Numbered label above (secondary — medium grey)
       ctx.font=`700 9px 'Martian Mono',monospace`;
-      ctx.fillStyle="#000"; ctx.textAlign="center";
-      ctx.fillText(String(i+1), s.x, s.y-11);
+      ctx.fillStyle = ink3;
+      ctx.textAlign="center";
+      ctx.fillText(String(i+1), s.x, s.y-9);
+
+      // Station name below — CLAMPED so no letter falls off the canvas edge.
+      // measureText tells us the label's width; if the centered position would
+      // put its left or right edge past the canvas, we shift it inward.
+      const label = n.n.toUpperCase();
       ctx.font=`700 10px 'Martian Mono',monospace`;
-      ctx.fillText(n.n.toUpperCase(), s.x, s.y+15);
+      ctx.fillStyle = "#000";
+      const tw = ctx.measureText(label).width;
+      let lx = s.x, align = "center";
+      const pad = 2;
+      if(s.x - tw/2 < pad){ align = "left";  lx = pad; }
+      else if(s.x + tw/2 > cssW - pad){ align = "right"; lx = cssW - pad; }
+      ctx.textAlign = align;
+      ctx.fillText(label, lx, s.y+14);
       return;
     }
     const col=catColor(n.c,theme);

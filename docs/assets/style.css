@@ -249,11 +249,16 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     font-weight:800}
   .modal-head p{display:none!important}
 
-  /* Constellation — no visible border, tighter height, drawn by renderConstellation
-     in print mode: pure black lines/dots/labels at 3x DPR for thermal sharpness. */
-  .constellation-wrap{height:45mm!important;margin:2mm 0 3mm 0!important;
-    box-shadow:none!important;border:none!important;background:#fff!important}
-  .constellation-wrap canvas{width:100%!important;height:100%!important}
+  /* Constellation — no fixed height. renderConstellation in print mode sizes
+     the canvas bitmap so its aspect ratio matches the drawing (via inline
+     style.width + style.height), and CSS lets the wrap grow to hug it. This
+     kills the whitespace that showed up under wide/short paths on receipts.
+     The 100%-forcing width/height rules from screen would defeat this — hence
+     the width:auto/height:auto here (canvas has explicit inline sizes in print). */
+  .constellation-wrap{height:auto!important;margin:2mm 0 3mm 0!important;
+    box-shadow:none!important;border:none!important;background:#fff!important;
+    line-height:0}
+  .constellation-wrap canvas{width:100%!important;height:auto!important;display:block!important}
 
   /* Keepsake — QR only. The "TAKE IT WITH YOU" eyebrow, the description
      paragraph, and the raw URL text are all hidden per the receipt spec. */
