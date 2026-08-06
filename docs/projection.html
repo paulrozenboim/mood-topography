@@ -94,8 +94,20 @@ setInterval(()=>{ if(!Store.auto) return; ai=(ai+1)%AUTO.length; Store.setFilter
 Store.sub(evt=>{
   document.documentElement.dataset.theme=Store.theme.projection;
   view.dirty=true;
-  if(evt.type==="path" && evt.animate){ view.playInjection(evt.path); setTimeout(()=>{ lastSwap=-1e9 },4200) }
+  if(evt.type==="path" && evt.animate){
+    view.playInjection(evt.path);
+    // Wait for the injection to plant itself, then paint a cast-specific
+    // bulletin that says something about THIS path — how it compares to the
+    // rest of the night. Hold the auto-pilot back for ~10 s so viewers get
+    // time to read it before the queue rotates on.
+    setTimeout(()=>{
+      const cast = castBulletin(evt.path, Store.paths);
+      paint(cast);
+      lastSwap = performance.now();
+    }, 1200);
+  }
   if(evt.type==="reset"){ qi=0; lastSwap=-1e9 }
+  if(evt.type==="remove"){ view.dirty=true; lastSwap=-1e9 }
 });
 
 document.addEventListener("keydown",e=>{

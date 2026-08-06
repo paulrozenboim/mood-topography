@@ -38,6 +38,21 @@
   .card .meta .seeded{display:inline-block;margin-left:6px;padding:1px 5px;font-size:8.5px;
     background:var(--hair);color:var(--ink-3);letter-spacing:.14em}
 
+  /* Per-card action buttons — sit over the thumbnail so they're reachable
+     without breaking the card-wide anchor. Nested buttons inside <a> are
+     handled with preventDefault on click, not by nesting HTML validators like. */
+  .card{position:relative}
+  .card-actions{position:absolute;top:6px;right:6px;display:flex;gap:4px;z-index:2;opacity:0;
+    transition:opacity .15s}
+  .card:hover .card-actions,.card:focus-within .card-actions{opacity:1}
+  .card-actions .act{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;
+    padding:0;border:none;background:rgba(0,0,0,.55);color:#fff;font-family:'Martian Mono',monospace;
+    font-size:12px;line-height:1;cursor:pointer;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+  .card-actions .act:hover{background:rgba(0,0,0,.85)}
+  .card-actions .act.danger:hover{background:var(--line-f)}
+  /* On touch devices actions are always visible — no hover state to rely on. */
+  @media (hover:none){ .card-actions{opacity:1} }
+
   .empty{padding:80px 22px;text-align:center;color:var(--ink-2);font-family:'Martian Mono',monospace;
     font-size:12px;line-height:1.7}
   .empty a{color:var(--ink);text-decoration:underline}
@@ -111,6 +126,10 @@ function render(){
     card.target = "_blank";
     card.rel = "noopener";
     card.innerHTML = `
+      <div class="card-actions" data-id="${p.id}">
+        <button type="button" class="act" data-act="print" title="Print this constellation" aria-label="Print">⎙</button>
+        <button type="button" class="act danger" data-act="delete" title="Remove from archive" aria-label="Delete">×</button>
+      </div>
       <div class="thumb"><canvas></canvas></div>
       <div class="meta">
         <div class="from">${anchor.n}${p.seeded?'<span class="seeded">DEMO</span>':''}</div>
@@ -129,6 +148,28 @@ filters.addEventListener("click", ev => {
   filterMode = btn.dataset.filter;
   [...filters.children].forEach(b=>b.setAttribute("aria-pressed", b===btn ? "true" : "false"));
   render();
+});
+
+// Card action buttons — event delegation. Intercepts before the anchor's
+// default navigation so clicking Print or Delete doesn't also open the card.
+grid.addEventListener("click", ev => {
+  const act = ev.target.closest(".card-actions .act");
+  if(!act) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  const id = act.parentElement.dataset.id;
+  const p = Store.paths.find(x=>x.id===id);
+  if(!p) return;
+  if(act.dataset.act === "delete"){
+    if(confirm(`Remove this path (${NODES[p.nodes[0]].n} → ${p.nodes.length} stations) from the archive?\nThis can't be undone.`)){
+      Store.removePath(id);
+    }
+  } else if(act.dataset.act === "print"){
+    // Open view.html in a new tab with ?print=1 — view.html auto-triggers the
+    // browser print dialog and uses its own thermal-friendly print CSS.
+    const url = `view.html?print=1#p=${encodePath(p.nodes)}${p.t?"&t="+encodeTime(p.t):""}`;
+    window.open(url, "_blank", "noopener");
+  }
 });
 
 Store.sub(render);

@@ -69,6 +69,7 @@ const Sync = (()=>{
       // otherwise the projection would try to play an injection animation for
       // every path in the log the moment the wall opens.
       if(m.k==="path")   Store.addPath(m.p,{broadcast:false, animate: !m._historical});
+      if(m.k==="remove") Store.removePath(m.id,{broadcast:false});
       if(m.k==="filter") Store.setFilter(m.f,{broadcast:false});
       if(m.k==="auto")   Store.setAuto(m.v,{broadcast:false});
       if(m.k==="theme")  Store.setTheme(m.which,m.val,{broadcast:false});
@@ -130,6 +131,13 @@ const Store = {
     this.paths.push(p);
     if(broadcast) Sync.send({k:"path", p});
     this.emit({type:"path", path:p, animate});
+  },
+  removePath(id, {broadcast=true}={}){
+    const idx = this.paths.findIndex(p=>p.id===id);
+    if(idx<0) return;
+    this.paths.splice(idx, 1);
+    if(broadcast) Sync.send({k:"remove", id});
+    this.emit({type:"remove", id});
   },
   setFilter(f,{broadcast=true}={}){
     this.filter=f; if(broadcast) Sync.send({k:"filter", f});

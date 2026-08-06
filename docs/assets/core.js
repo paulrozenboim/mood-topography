@@ -397,6 +397,99 @@ function bulletins(A){
 }
 
 /* ============================================================
+   CAST BULLETIN — what the wall says the moment a new path arrives.
+   Picks one comparison between the just-cast path and everything else on the
+   wall, in a priority order that favours the most dramatic / rarest fact.
+   Fires only when a real cast lands (not on historical hydration).
+   ============================================================ */
+function castBulletin(newPath, allPaths){
+  const others = allPaths.filter(p => p.id !== newPath.id);
+  const total = allPaths.length;
+  const anchor = NODES[newPath.nodes[0]];
+  const dest = NODES[newPath.nodes[newPath.nodes.length-1]];
+
+  // 1. Solo debut: this path is the first to touch some previously-untouched station
+  const debut = newPath.nodes.find(id =>
+    !others.some(p => p.nodes.includes(id))
+  );
+  if(debut != null && others.length > 0){
+    const n = NODES[debut];
+    return {tag:"First to visit", accent:n.c,
+      line:`This path is the first to touch {${n.n}}.`,
+      sub:`A corner of the map, opened for the first time tonight`,
+      focus:{type:"node", id:n.id, motion:"pulse"}, hold:true};
+  }
+
+  // 2. Exact-route match with someone else — you're not alone
+  const routeKey = newPath.nodes.join(">");
+  const echoes = others.filter(p => p.nodes.join(">") === routeKey);
+  if(echoes.length > 0){
+    return {tag:"Well-worn path", accent:anchor.c,
+      line:`${echoes.length + 1} of you have now traced this exact route.`,
+      sub:newPath.nodes.map(i=>NODES[i].n).join("  →  "),
+      focus:{type:"path", id:newPath.id, motion:"traverse"}, hold:true};
+  }
+
+  // 3. All four lines in one path — always worth flagging
+  const cats = new Set(newPath.nodes.map(i => NODES[i].c));
+  if(cats.size === 4){
+    const priorFour = others.filter(p =>
+      new Set(p.nodes.map(i => NODES[i].c)).size === 4
+    ).length;
+    return {tag:"Full spectrum", accent:dest.c,
+      line:`This path touches all four lines — ${priorFour ? "one of "+(priorFour+1) : "the first"} tonight to do so.`,
+      sub:newPath.nodes.map(i=>NODES[i].n).join("  →  "),
+      focus:{type:"path", id:newPath.id, motion:"traverse"}, hold:true};
+  }
+
+  // 4. Longest so far — strict > against every other path
+  if(others.length && others.every(p => p.nodes.length < newPath.nodes.length)){
+    return {tag:"Longest so far", accent:anchor.c,
+      line:`The longest journey of the night so far — {${newPath.nodes.length}} stations.`,
+      sub:newPath.nodes.map(i=>NODES[i].n).join("  →  "),
+      focus:{type:"path", id:newPath.id, motion:"traverse"}, hold:true};
+  }
+
+  // 5. Popular anchor — three or more people also started here
+  const sharedAnchor = others.filter(p => p.nodes[0] === newPath.nodes[0]).length;
+  if(sharedAnchor >= 3){
+    return {tag:"Common ground", accent:anchor.c,
+      line:`This path joins {${sharedAnchor + 1}} of you who started at {${anchor.n}}.`,
+      sub:`Out of ${total} casts, ${anchor.n} is a shared starting point`,
+      focus:{type:"node", id:anchor.id, motion:"pulse"}};
+  }
+
+  // 6. Popular destination — three or more also ended here
+  const sharedEnd = others.filter(p => p.nodes[p.nodes.length-1] === newPath.nodes[newPath.nodes.length-1]).length;
+  if(sharedEnd >= 3){
+    return {tag:"Shared destination", accent:dest.c,
+      line:`This path arrives at {${dest.n}} — where ${sharedEnd + 1} of you have landed tonight.`,
+      sub:`A gathering point on the map`,
+      focus:{type:"node", id:dest.id, motion:"pulse"}};
+  }
+
+  // 7. Stayed entirely on one line
+  if(cats.size === 1){
+    const c = [...cats][0];
+    const sameLine = others.filter(p =>
+      new Set(p.nodes.map(i=>NODES[i].c)).size === 1 &&
+      NODES[p.nodes[0]].c === c
+    ).length;
+    return {tag:"Stayed on one line", accent:c,
+      line:`This journey never left {${CATS[c].name}}.`,
+      sub:sameLine ? `${sameLine + 1} of tonight's paths kept to that line` : "The first single-line path of the night",
+      focus:{type:"cat", c, motion:"glow"}};
+  }
+
+  // 8. Fallback — welcome to the night, keep the injection front-and-centre
+  const ord = ["1st","2nd","3rd"][total-1] || `${total}th`;
+  return {tag:"Just cast", accent:anchor.c,
+    line:`The ${ord} journey of the night, from {${anchor.n}} to {${dest.n}}.`,
+    sub:newPath.nodes.map(i=>NODES[i].n).join("  →  "),
+    focus:{type:"path", id:newPath.id, motion:"traverse"}};
+}
+
+/* ============================================================
    GEOMETRY — sweeping arteries, gravity-bent
    ============================================================ */
 function splinePoints(pts, gravity){
@@ -978,10 +1071,28 @@ class MapView{
       }
       const active = this.draft && this.draft.nodes.includes(n.id);
       const hot = this.hot===n.id;
+      // Physical scaling in response to bulletin motions — "the busiest station"
+      // bulletin now actually makes that dot bigger and breathe. Category glow
+      // does the same on every node in the line, staggered by node id so the
+      // group ripples rather than pulsing in unison.
+      let focusScale = 1;
+      if(this.focus && this.focus.motion && this.opts.showAggregate){
+        const T = (ts - (this.focusT0||ts)) / 1000;
+        if(this.focus.motion==="pulse" && this.focus.type==="node" && this.focus.id===n.id){
+          focusScale = 1.55 + 0.55*Math.sin(T*2.6);
+        } else if(this.focus.motion==="glow" && this.focus.type==="cat" && this.focus.c===n.c){
+          focusScale = 1.18 + 0.20*Math.sin(T*1.5 + n.id*0.42);
+        } else if(this.focus.motion==="traverse" && this.focus.type==="path"){
+          // Punch each station on the focused path slightly, so it reads as
+          // "these are the stations that path visits" without the trail alone.
+          const p = Store.paths.find(x=>x.id===this.focus.id);
+          if(p && p.nodes.includes(n.id)) focusScale = 1.15 + 0.08*Math.sin(T*3 + n.id*0.3);
+        }
+      }
       // stations must read clearly as "stations" from a projector at the back of a room even
       // with zero data — traffic makes them bigger and brighter, it must never be what makes
       // them visible at all.
-      const r=(4.6+heat*5.0)*(this.opts.role==="tablet"?1.2:1);
+      const r=(4.6+heat*5.0)*(this.opts.role==="tablet"?1.2:1)*focusScale;
 
       if(this.opts.showAggregate && heat>0.05 && !this.opts.interactive){
         const ph=((this.pulse*0.5)+(n.id*0.137))%1;

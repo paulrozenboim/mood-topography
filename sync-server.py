@@ -126,16 +126,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             self.send_error(400); return
         with _lock:
-            _log.append(msg)
-            while len(_log) > MAX_LOG:
-                _log.popleft()
-            # A "clear" wipes the durable log too — otherwise the next client
-            # to join would re-hydrate every path we just cleared.
-            if msg.get("k") == "clear":
+            # A "remove" prunes the matching "path" message from both the
+            # in-memory log AND the on-disk file — otherwise a future client
+            # joining would replay the "path" add and re-hydrate the removed
+            # entry. We still keep the "remove" message itself so any client
+            # that already saw the path also runs its removal.
+            if msg.get("k") == "remove":
+                target_id = msg.get("id")
+                filtered = [m for m in _log
+                            if not (m.get("k") == "path"
+                                    and (m.get("p") or {}).get("id") == target_id)]
+                _log.clear()
+                _log.extend(filtered)
+                _log.append(msg)
+                # rewrite the whole disk file to reflect the pruned log
+                _truncate_disk()
+                for m in _log:
+                    _append_to_disk(m)
+            elif msg.get("k") == "clear":
+                # "clear" wipes the durable log entirely — otherwise the next
+                # client to join would re-hydrate every path we just cleared.
                 _log.clear()
                 _log.append(msg)
                 _truncate_disk()
-            _append_to_disk(msg)
+                _append_to_disk(msg)
+            else:
+                _log.append(msg)
+                while len(_log) > MAX_LOG:
+                    _log.popleft()
+                _append_to_disk(msg)
         _broadcast(msg)
         self.send_response(204); self._cors(); self.end_headers()
 
