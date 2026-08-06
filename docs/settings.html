@@ -28,10 +28,9 @@
 
       <div>
         <h2>Theme</h2>
-        <div class="readout" style="margin-bottom:8px">Dark blends light additively — routes brighten where they overlap. Light blends like ink — better for a bright room.</div>
+        <div class="readout" style="margin-bottom:8px">One theme now applies to every operator page — Cast Path, Projection, Settings, and Archive stay in sync. Dark blends light additively (routes brighten where they overlap); Light blends like ink (better for a bright room).</div>
         <div class="row">
-          <button class="chip" id="tProj"></button>
-          <button class="chip" id="tTab"></button>
+          <button class="chip" id="themeBtn"></button>
         </div>
       </div>
 
@@ -107,9 +106,8 @@ const chips=modes.map(([label,f,hint])=>{
 const autoBtn=document.getElementById("autoBtn");
 autoBtn.onclick=()=>Store.setAuto(!Store.auto);
 
-const tProj=document.getElementById("tProj"), tTab=document.getElementById("tTab");
-tProj.onclick=()=>Store.setTheme("projection",Store.theme.projection==="dark"?"light":"dark");
-tTab.onclick=()=>Store.setTheme("tablet",Store.theme.tablet==="dark"?"light":"dark");
+const themeBtn=document.getElementById("themeBtn");
+themeBtn.onclick=()=>Store.setTheme(Store.theme==="dark"?"light":"dark");
 
 document.getElementById("seedBtn").onclick=()=>seedPaths(60);
 document.getElementById("clearSeedBtn").onclick=()=>{ if(confirm("Remove all demo/rehearsal paths? Real casts tonight are kept.")) Store.clearSeeded() };
@@ -136,11 +134,9 @@ function refresh(){
     ? `Auto-pilot: On<b>cycling every 14s — click to hold the current view</b>`
     : `Auto-pilot: Off<b>wall is locked to your last choice above</b>`;
 
-  const projDark=Store.theme.projection==="dark", tabDark=Store.theme.tablet==="dark";
-  tProj.setAttribute("aria-pressed", projDark?"true":"false");
-  tTab.setAttribute("aria-pressed", tabDark?"true":"false");
-  tProj.innerHTML = `Projection: ${projDark?"Dark":"Light"}<b>click to switch to ${projDark?"light":"dark"}</b>`;
-  tTab.innerHTML  = `Cast Path: ${tabDark?"Dark":"Light"}<b>click to switch to ${tabDark?"light":"dark"}</b>`;
+  const isDark = Store.theme === "dark";
+  themeBtn.setAttribute("aria-pressed", isDark ? "true" : "false");
+  themeBtn.innerHTML = `Theme: ${isDark ? "Dark" : "Light"}<b>click to switch to ${isDark ? "light" : "dark"} everywhere</b>`;
 
   const A=analyse(Store.paths);
   ro.innerHTML = A.total

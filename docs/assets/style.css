@@ -99,6 +99,28 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .bulletin-bar .line .hi{color:var(--accent,var(--ink))}
 .bulletin-bar .sub{font-family:'Martian Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--ink-3);
   text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Cast-celebration flair — fires once the moment a new path lands. A brief
+   accent-tinted flash across the bar (matching the anchor's line colour via
+   the same --accent variable the .hi span already uses), and a punch on the
+   tag pill so it reads instantly as a distinct beat, not just another bulletin. */
+.bulletin-bar.celebrate .tag{background:var(--accent,var(--ink));color:var(--bg)}
+.bulletin-bar.celebrate-flash{
+  animation: cast-flash 1.6s cubic-bezier(.16,.84,.34,1);
+}
+.bulletin-bar.celebrate-flash .tag{
+  animation: cast-tag-punch .55s cubic-bezier(.16,.84,.34,1);
+}
+@keyframes cast-flash{
+  0%   { background: color-mix(in srgb, var(--accent, var(--ink)) 22%, transparent); }
+  60%  { background: color-mix(in srgb, var(--accent, var(--ink)) 8%,  transparent); }
+  100% { background: transparent; }
+}
+@keyframes cast-tag-punch{
+  0%   { transform: scale(1.28); letter-spacing: .34em; }
+  60%  { transform: scale(1.05); letter-spacing: .22em; }
+  100% { transform: scale(1);    letter-spacing: .2em;  }
+}
 .legend{position:absolute;left:var(--pad);bottom:var(--pad);z-index:5;
   display:flex;flex-direction:column;gap:5px;pointer-events:none}
 .legend div{display:flex;align-items:center;gap:7px;font-family:'Martian Mono',monospace;font-size:9px;
@@ -168,6 +190,21 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .modal-head p{margin-top:6px;font-family:'Martian Mono',monospace;font-size:10.5px;color:var(--ink-2);letter-spacing:.04em}
 .constellation-wrap{position:relative;margin:16px 22px;height:min(46vh,340px);background:#05060700 ;
   box-shadow:inset 0 0 0 1px var(--hair)}
+/* Landscape (horizontal iPad, wide-and-short viewports) — widen the modal so
+   the constellation stays legible AND leaves room for the QR keepsake below
+   without demanding a scroll. Constellation gets a smaller vh cap in landscape
+   so the QR block is always visible in the viewport. */
+@media (orientation: landscape) and (min-width: 900px){
+  .modal{width:min(820px,94vw)}
+  .constellation-wrap{height:min(38vh,260px)}
+}
+@media (orientation: landscape) and (max-height: 720px){
+  .constellation-wrap{height:min(34vh,220px)}
+  .modal-head{padding:14px 22px 0}
+  .modal-head h3{font-size:17px}
+  .keepsake{padding:10px}
+  .keepsake canvas{width:100px!important;height:100px!important}
+}
 .modal-list{margin:0 22px 4px;display:flex;flex-wrap:wrap;gap:6px}
 .modal-list span{display:inline-flex;align-items:center;gap:6px;font-family:'Martian Mono',monospace;
   font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;box-shadow:inset 0 0 0 1px var(--hair)}

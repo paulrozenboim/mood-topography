@@ -72,12 +72,14 @@ const Sync = (()=>{
       if(m.k==="remove") Store.removePath(m.id,{broadcast:false});
       if(m.k==="filter") Store.setFilter(m.f,{broadcast:false});
       if(m.k==="auto")   Store.setAuto(m.v,{broadcast:false});
-      if(m.k==="theme")  Store.setTheme(m.which,m.val,{broadcast:false});
+      if(m.k==="theme")  Store.setTheme(m.val,{broadcast:false}); // (older messages carried a `which` field — we ignore it and set the unified theme)
       if(m.k==="clear")  Store.clear({broadcast:false});
       if(m.k==="clearSeeded") Store.clearSeeded({broadcast:false});
       if(m.k==="hello")  this.send({k:"state",paths:Store.paths,filter:Store.filter,auto:Store.auto,theme:Store.theme});
       if(m.k==="state" && Store.paths.length===0){
-        Store.replaceAll(m.paths); Store.filter=m.filter; Store.auto=m.auto; Store.theme=m.theme;
+        Store.replaceAll(m.paths); Store.filter=m.filter; Store.auto=m.auto;
+        // Normalise: an older client might send theme in the legacy shape.
+        Store.theme = _initTheme(m.theme);
         Store.emit({type:"reset"});
       }
     }
@@ -116,11 +118,21 @@ function persistNow(){
 }
 
 const _persisted = loadPersisted();
+
+// Migrate legacy per-role theme ({projection, tablet}) to a single unified
+// string. The operator now sees one theme across every page they touch; the
+// participant's take-home view.html manages its own preference separately.
+function _initTheme(raw){
+  if(typeof raw === "string" && (raw === "dark" || raw === "light")) return raw;
+  if(raw && typeof raw === "object") return raw.projection || raw.tablet || "dark";
+  return "dark";
+}
+
 const Store = {
   paths: _persisted?.paths || [],
   filter: _persisted?.filter || {type:"all"},
   auto: _persisted?.auto ?? true,
-  theme: _persisted?.theme || {projection:"dark", tablet:"light"},
+  theme: _initTheme(_persisted?.theme),
   listeners:new Set(),
   version:0,
   sub(fn){this.listeners.add(fn); return ()=>this.listeners.delete(fn)},
@@ -147,8 +159,11 @@ const Store = {
     this.auto=v; if(broadcast) Sync.send({k:"auto", v});
     this.emit({type:"auto"});
   },
-  setTheme(which,val,{broadcast=true}={}){
-    this.theme[which]=val; if(broadcast) Sync.send({k:"theme", which, val});
+  setTheme(val,{broadcast=true}={}){
+    // Single unified theme now — one value applies to every operator surface
+    // (tablet, projection, settings, archive). view.html manages its own.
+    this.theme = val;
+    if(broadcast) Sync.send({k:"theme", val});
     this.emit({type:"theme"});
   },
   clear({broadcast=true}={}){
@@ -163,5 +178,7 @@ const Store = {
   replaceAll(paths){ this.paths=paths.slice(); this.emit({type:"reset"}) }
 };
 
-Store.sub(()=>{ if(typeof document!=="undefined") document.documentElement.dataset.theme = Store.theme.projection });
-if(typeof document!=="undefined") document.documentElement.dataset.theme = Store.theme.projection;
+// Auto-apply the theme to the document whenever it changes and on first load.
+// Individual pages don't need to manage this — they just call Store.setTheme.
+Store.sub(()=>{ if(typeof document!=="undefined") document.documentElement.dataset.theme = Store.theme });
+if(typeof document!=="undefined") document.documentElement.dataset.theme = Store.theme;

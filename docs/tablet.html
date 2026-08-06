@@ -55,7 +55,7 @@
         <div class="keepsake-text">
           <div class="eyebrow">Take it with you</div>
           <p>Scan with your phone to keep this constellation. The link stays live after the night.</p>
-          <a class="keepsake-url" id="mURL" target="_blank" rel="noopener"></a>
+          <a class="keepsake-url" id="mURL" target="_blank" rel="noopener" hidden></a>
         </div>
       </div>
       <div class="print-credits credits" aria-hidden="true">
@@ -94,8 +94,8 @@ const toast=document.getElementById("toast");
 // Settings, Projection, or Home from the kiosk mid-show. Only the theme button
 // stays, top-right, so operators can flip dark/light without touching the router.
 document.getElementById("themeBtn").onclick =
-  ()=>Store.setTheme("tablet", Store.theme.tablet==="dark"?"light":"dark");
-document.documentElement.dataset.theme = Store.theme.tablet;
+  ()=>Store.setTheme(Store.theme==="dark"?"light":"dark");
+document.documentElement.dataset.theme = Store.theme;
 
 let phase="anchor"; // anchor | draw
 
@@ -140,7 +140,7 @@ function render(){
   strip.innerHTML = ns.length
     ? ns.map((id,i)=>{
         const n=NODES[id];
-        return `${i?'<span class="arw">→</span>':''}<span class="stop"><i class="dot" style="background:${catColor(n.c,Store.theme.tablet)}"></i>${n.n}</span>`;
+        return `${i?'<span class="arw">→</span>':''}<span class="stop"><i class="dot" style="background:${catColor(n.c,Store.theme)}"></i>${n.n}</span>`;
       }).join("")
     : `<span class="empty">No stations selected</span>`;
   previewBtn.disabled = !(ns.length>=MIN_STOPS && ns.length<=MAX_STOPS);
@@ -220,7 +220,7 @@ let lastCastIds=null;                              // captured for onbeforeprint
 // (2) beforeprint itself with a rAF-deferred draw as a belt-and-braces backup.
 const redrawForCurrentSize = (print=false) => {
   if(lastCastIds && lastCastIds.length){
-    renderConstellation(star, lastCastIds, Store.theme.tablet, print ? {print:true} : {});
+    renderConstellation(star, lastCastIds, Store.theme, print ? {print:true} : {});
   }
 };
 window.addEventListener("beforeprint", ()=>{
@@ -233,7 +233,7 @@ try{
   matchMedia("print").addEventListener("change", e => { redrawForCurrentSize(e.matches) });
 }catch(_){}                                            // pre-2020 Safari doesn't support addEventListener on MQL
 
-const drawConstellation=(ids)=> renderConstellation(star, ids, Store.theme.tablet);
+const drawConstellation=(ids)=> renderConstellation(star, ids, Store.theme);
 
 function openPreview(){
   const ns=view.draft.nodes.slice();
@@ -245,15 +245,15 @@ function openPreview(){
   mMeta.style.display="none";
   mKeepsake.style.display="none";
   mList.innerHTML=ns.map((id,i)=>{const n=NODES[id];
-    return `<span><i style="background:${catColor(n.c,Store.theme.tablet)}"></i>${i+1}. ${n.n}</span>`}).join("");
+    return `<span><i style="background:${catColor(n.c,Store.theme)}"></i>${i+1}. ${n.n}</span>`}).join("");
   mFoot.innerHTML="";
-  const printBtn=el("button","btn ghost","Print");
+  // No Print here — printing before commit lets people walk away with a receipt
+  // that never joined the wall. Print button moves in only after cast, in castNow().
   const editBtn=el("button","btn ghost","Keep editing");
   const castBtn=el("button","btn","Cast to the wall");
-  printBtn.onclick=()=>window.print();
   editBtn.onclick=()=>veil.classList.remove("on");
   castBtn.onclick=()=>castNow(ns);
-  mFoot.append(printBtn, editBtn, castBtn);
+  mFoot.append(editBtn, castBtn);
   veil.classList.add("on");
   requestAnimationFrame(()=>drawConstellation(ns));
 }
@@ -292,7 +292,7 @@ function castNow(ns){
 
 window.addEventListener("resize",()=>{ if(veil.classList.contains("on")) drawConstellation(view.draft.nodes) });
 
-const unsub=Store.sub(()=>{ document.documentElement.dataset.theme=Store.theme.tablet; view.dirty=true; render() });
+const unsub=Store.sub(()=>{ document.documentElement.dataset.theme=Store.theme; view.dirty=true; render() });
 render();
 Sync.hello();
 </script>

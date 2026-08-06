@@ -1076,7 +1076,9 @@ class MapView{
       // does the same on every node in the line, staggered by node id so the
       // group ripples rather than pulsing in unison.
       let focusScale = 1;
-      if(this.focus && this.focus.motion && this.opts.showAggregate){
+      if(this.focus && this.focus.motion && this.opts.showAggregate && !this.inject){
+        // While an injection animation is playing, hold the nodes at their base
+        // size — the injection is the only motion on the map for those 3–4s.
         const T = (ts - (this.focusT0||ts)) / 1000;
         if(this.focus.motion==="pulse" && this.focus.type==="node" && this.focus.id===n.id){
           focusScale = 1.55 + 0.55*Math.sin(T*2.6);
@@ -1210,6 +1212,12 @@ class MapView{
      -------------------------------------------------------------------------- */
   drawMotion(ctx, ts, theme, dark){
     const f = this.focus; if(!f || !f.motion) return;
+    // Suppress motion overlays while an injection animation is running — the
+    // injection is the sole animation during a cast and we don't want a
+    // traversing token, pulse ring or cascade drawing over it. (The projection's
+    // Store.sub already delays the insight bulletin until injection is done;
+    // this guard covers any other scenario that sets focus mid-injection.)
+    if(this.inject) return;
     const T = (ts - (this.focusT0||ts)) / 1000;
     const g = this.gravity();
 
