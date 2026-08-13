@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Mood Topography — 3D landscape</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  html,body{overflow:hidden}
+  #app{position:fixed;inset:0;display:block}
+  canvas#scene{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+  canvas#scene:active{cursor:grabbing}
+  .hud{position:absolute;pointer-events:none;font-family:'Martian Mono',monospace;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);text-shadow:0 1px 4px rgba(0,0,0,.55)}
+  .hud.tl{top:var(--pad);left:var(--pad)}
+  .hud.br{bottom:var(--pad);right:var(--pad);text-align:right;display:flex;flex-direction:column;gap:12px;align-items:flex-end}
+  .hud .eyebrow{font-size:9px;color:var(--ink-3);letter-spacing:.24em}
+  .hud h1{font-size:clamp(16px,2.3vw,26px);font-weight:800;font-variation-settings:'wdth' 116;
+    color:var(--ink);margin-top:6px;line-height:1.05;text-shadow:0 2px 8px rgba(0,0,0,.55)}
+  .hud .meta{font-size:10px;color:var(--ink-3);margin-top:8px;line-height:1.7}
+  .hud .meta b{color:var(--ink-2);font-weight:600}
+  .hud .keys{font-size:9px;color:var(--ink-3);line-height:1.7}
+  .hud .keys b{color:var(--ink);font-weight:700;background:rgba(127,127,127,.14);padding:1px 5px}
+  .hud .slider-row{display:flex;align-items:center;gap:10px;pointer-events:auto;
+    background:var(--panel);box-shadow:inset 0 0 0 1px var(--hair);padding:8px 12px;
+    backdrop-filter:blur(8px)}
+  .hud .slider-row label{font-size:9px;color:var(--ink-3);letter-spacing:.18em}
+  .hud .slider-row input[type=range]{width:130px;accent-color:var(--ink-2);cursor:ew-resize}
+  .hud .slider-row .val{font-size:9px;color:var(--ink);width:2.5em;text-align:right;font-weight:700}
+  .corner-btns{position:absolute;top:var(--pad);right:var(--pad);display:flex;gap:6px;pointer-events:auto;z-index:6}
+  .corner-btns .corner-btn{position:relative;top:auto;right:auto}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="scene"></canvas>
+  <div class="hud tl">
+    <div class="eyebrow">3D · Mood landscape</div>
+    <h1>The Mood Topography</h1>
+    <div class="meta" id="meta"></div>
+  </div>
+  <div class="hud br">
+    <div class="slider-row">
+      <label>Curve</label>
+      <input type="range" id="curveSlider" min="0" max="100" value="0" step="1">
+      <span class="val" id="curveVal">0%</span>
+    </div>
+    <div class="keys">
+      <b>drag</b> rotate · <b>middle-drag</b> pan · <b>wheel</b> zoom · <b>R</b> reset · <b>Space</b> auto-rotate · <b>P</b> screenshot
+    </div>
+  </div>
+  <div class="corner-btns" id="corners"></div>
+</div>
+
+<script src="assets/icons.js"></script>
+<script src="assets/remote-config.js"></script>
+<script src="assets/store.js"></script>
+<script src="assets/core.js"></script>
+<script src="assets/nav.js"></script>
+<script>
+"use strict";
+
+/* ============================================================
+   3D LANDSCAPE — a custom canvas pipeline (no Three.js). Stations occupy the
+   X-Z plane at the flat map's coordinates; Y is traffic-derived height, with
+   an optional spherical bulge (curvature slider) that lifts the middle so the
+   whole terrain reads as a mini-planet section. Left-drag rotates, middle-drag
+   pans, wheel zooms.
+   ============================================================ */
+
+const cv = document.getElementById("scene");
+const ctx = cv.getContext("2d");
+const meta = document.getElementById("meta");
+const corners = document.getElementById("corners");
+const curveSlider = document.getElementById("curveSlider");
+const curveVal = document.getElementById("curveVal");
+
+document.documentElement.dataset.theme = Store.theme;
+
+// ---- Camera state --------------------------------------------------------
+let yaw = 0.62, pitch = -0.48;
+let dist = 1750;
+let panX = 0, panY = 0;                 // screen-space translation
+let autoRotate = true;
+let showPaths = true;
+let curvature = 0;                       // 0..1
+let dragMode = null;                     // "rotate" | "pan" | null
+let dragStart = null;
+const FOV = 720;
+let cx = 0, cy = 0;
+
+const WORLD_BOX = {w:1400, h:820};
+const worldCenter = {x: WORLD_BOX.w/2, y: 0, z: WORLD_BOX.h/2};
+const dMaxWorld = Math.hypot(WORLD_BOX.w/2, WORLD_BOX.h/2);
+const MAX_BULGE = 260;                    // Y offset added at world center when curvature=1
+
+function resize(){
+  const dpr = Math.min(devicePixelRatio||1, 2);
+  const r = cv.getBoundingClientRect();
+  cv.width = Math.max(1, r.width*dpr);
+  cv.height = Math.max(1, r.height*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  cx = r.width/2; cy = r.height/2;
+}
+addEventListener("resize", resize); resize();
+
+// ---- 3D → 2D projection --------------------------------------------------
+// Apply spherical bulge to Y based on horizontal distance from world center,
+// then rotate + perspective-project. curvature=0 leaves the plane flat.
+function project(wx, wy, wz){
+  const dx = wx - worldCenter.x;
+  const dz = wz - worldCenter.z;
+  const dPlane = Math.sqrt(dx*dx + dz*dz);
+  const bulge = curvature > 0
+    ? curvature * MAX_BULGE * Math.sqrt(Math.max(0, 1 - (dPlane/dMaxWorld)*(dPlane/dMaxWorld)))
+    : 0;
+  const x = dx;
+  const y = (wy - worldCenter.y) + bulge;
+  const z = dz;
+  const cy_ = Math.cos(yaw),  sy_ = Math.sin(yaw);
+  const cp_ = Math.cos(pitch), sp_ = Math.sin(pitch);
+  const x1 = x*cy_ - z*sy_;
+  const z1 = x*sy_ + z*cy_;
+  const y2 = y*cp_ - z1*sp_;
+  const z2 = y*sp_ + z1*cp_;
+  const zc = z2 + dist;
+  if(zc <= 1) return null;
+  const s = FOV / zc;
+  return { x: cx + x1*s + panX, y: cy - y2*s + panY, depth: zc, scale: s };
+}
+
+// ---- Traffic → height ----------------------------------------------------
+let maxTraffic = 0;
+function computeMaxTraffic(){
+  const A = analyse(Store.paths);
+  maxTraffic = Math.max(1, ...A.traffic);
+  return A;
+}
+const MAX_HEIGHT = 700;    // world units, height of the tallest station
+function stationHeight(id, traffic){
+  const t = (traffic[id]||0) / maxTraffic;
+  // pow 0.6 — mid-traffic stations rise more visibly than sqrt(t) gave.
+  return Math.pow(t, 0.6) * MAX_HEIGHT;
+}
+
+// ---- Theme-reactive palette ---------------------------------------------
+function palette(){
+  const rs = getComputedStyle(document.documentElement);
+  const dark = Store.theme === "dark";
+  return {
+    dark,
+    bgOuter: dark ? "#050608" : (rs.getPropertyValue("--bg").trim() || "#E9EBEA"),
+    bgInner: dark ? "#101418" : (rs.getPropertyValue("--bg-2").trim() || "#F4F5F4"),
+    ink:     rs.getPropertyValue("--ink").trim(),
+    ink2:    rs.getPropertyValue("--ink-2").trim(),
+    ink3:    rs.getPropertyValue("--ink-3").trim(),
+    hair:    rs.getPropertyValue("--hair").trim(),
+    grid:    dark ? "rgba(140,160,180,.32)" : "rgba(30,40,55,.34)",
+    axis:    dark ? "rgba(255,255,255,.14)" : "rgba(0,0,0,.22)",
+    plate:   dark ? "rgba(0,0,0,.65)"      : "rgba(255,255,255,.85)",
+    pathComp: dark ? "lighter" : "multiply",
+    pathReal: dark ? 0.55 : 0.68,
+    pathSeed: dark ? 0.22 : 0.28,
+  };
+}
+
+// ---- Draw helpers --------------------------------------------------------
+function dashedLine(p0, p1, dash=6, gap=6, alpha=1){
+  const dx = p1.x - p0.x, dy = p1.y - p0.y;
+  const len = Math.hypot(dx, dy);
+  if(len < 0.1) return;
+  const ux = dx/len, uy = dy/len;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  let t = 0;
+  while(t < len){
+    const t1 = Math.min(len, t + dash);
+    ctx.beginPath();
+    ctx.moveTo(p0.x + ux*t, p0.y + uy*t);
+    ctx.lineTo(p0.x + ux*t1, p0.y + uy*t1);
+    ctx.stroke();
+    t = t1 + gap;
+  }
+  ctx.restore();
+}
+
+function spline3D(pts, samples=18){
+  if(pts.length < 2) return pts.slice();
+  const P = [pts[0], ...pts, pts[pts.length-1]];
+  const out = [];
+  for(let i=1; i<P.length-2; i++){
+    const p0=P[i-1], p1=P[i], p2=P[i+1], p3=P[i+2];
+    for(let t=0; t<1; t+=1/samples){
+      const t2=t*t, t3=t2*t;
+      const x=.5*((2*p1.x)+(-p0.x+p2.x)*t+(2*p0.x-5*p1.x+4*p2.x-p3.x)*t2+(-p0.x+3*p1.x-3*p2.x+p3.x)*t3);
+      const y=.5*((2*p1.y)+(-p0.y+p2.y)*t+(2*p0.y-5*p1.y+4*p2.y-p3.y)*t2+(-p0.y+3*p1.y-3*p2.y+p3.y)*t3);
+      const z=.5*((2*p1.z)+(-p0.z+p2.z)*t+(2*p0.z-5*p1.z+4*p2.z-p3.z)*t2+(-p0.z+3*p1.z-3*p2.z+p3.z)*t3);
+      out.push({x,y,z});
+    }
+  }
+  out.push(pts[pts.length-1]);
+  return out;
+}
+
+// ---- Frame -------------------------------------------------------------
+let lastTs = performance.now();
+function frame(ts){
+  const dt = Math.min(0.05, (ts - lastTs)/1000);
+  lastTs = ts;
+  if(autoRotate && !dragMode) yaw += dt * 0.14;
+  const A = computeMaxTraffic();
+  const P = palette();
+
+  const r = cv.getBoundingClientRect();
+  ctx.clearRect(0,0,r.width,r.height);
+  const grad = ctx.createRadialGradient(cx, cy*0.6, 60, cx, cy*0.6, Math.max(r.width, r.height));
+  grad.addColorStop(0, P.bgInner);
+  grad.addColorStop(1, P.bgOuter);
+  ctx.fillStyle = grad; ctx.fillRect(0,0,r.width,r.height);
+
+  // ----- Grid on the X-Z plane (Y=0) -----
+  ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+  const STEP = 100, minor = 3;
+  for(let i=-4; i<=WORLD_BOX.w/STEP + 4; i++){
+    const x = i*STEP;
+    const a = project(x, 0, -400);
+    const b = project(x, 0, WORLD_BOX.h + 400);
+    if(!a || !b) continue;
+    dashedLine(a, b, 3, minor, 0.35);
+  }
+  for(let j=-4; j<=WORLD_BOX.h/STEP + 4; j++){
+    const z = j*STEP;
+    const a = project(-400, 0, z);
+    const b = project(WORLD_BOX.w + 400, 0, z);
+    if(!a || !b) continue;
+    dashedLine(a, b, 3, minor, 0.35);
+  }
+
+  // ----- Vertical axis reference at world center -----
+  const axisTop = project(worldCenter.x, MAX_HEIGHT + 60, worldCenter.z);
+  const axisBase = project(worldCenter.x, 0, worldCenter.z);
+  if(axisTop && axisBase){
+    ctx.strokeStyle = P.axis; ctx.lineWidth = 1;
+    dashedLine(axisBase, axisTop, 4, 6, 1);
+  }
+
+  // ----- Aggregate paths as 3D curves (skipped when hidden) -----
+  if(showPaths){
+    const pathsRender = [];
+    for(const p of Store.paths){
+      if(p.nodes.length < 2) continue;
+      const worldPts = p.nodes.map(id => {
+        const n = NODES[id];
+        const h = stationHeight(id, A.traffic);
+        return {x:n.x, y:h + 12, z:n.y};
+      });
+      const spl = spline3D(worldPts, 16);
+      const scr = spl.map(q => project(q.x, q.y, q.z)).filter(Boolean);
+      if(scr.length < 2) continue;
+      const avgDepth = scr.reduce((a,b)=>a+b.depth,0) / scr.length;
+      pathsRender.push({p, scr, avgDepth});
+    }
+    pathsRender.sort((a,b)=> b.avgDepth - a.avgDepth);
+    for(const {p, scr} of pathsRender){
+      const c = catColor(NODES[p.nodes[0]].c, Store.theme);
+      ctx.save();
+      ctx.globalCompositeOperation = P.pathComp;
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 1.6;
+      ctx.globalAlpha = p.seeded ? P.pathSeed : P.pathReal;
+      ctx.beginPath();
+      scr.forEach((q,i)=> i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y));
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // ----- Station columns + caps -----
+  const stationRender = NODES.map(n => {
+    const h = stationHeight(n.id, A.traffic);
+    const base = project(n.x, 0, n.y);
+    const top  = project(n.x, h, n.y);
+    if(!base || !top) return null;
+    return {n, h, base, top, depth:top.depth, traffic:A.traffic[n.id]||0};
+  }).filter(Boolean).sort((a,b)=> b.depth - a.depth);
+
+  for(const st of stationRender){
+    const col = catColor(st.n.c, Store.theme);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+    dashedLine(st.base, st.top, 5, 4, 0.75);
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = col; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(st.base.x, st.base.y, Math.max(3, 4 * st.base.scale), 0, 7);
+    ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    const capR = 3 + Math.min(6, st.traffic*0.15);
+    ctx.arc(st.top.x, st.top.y, capR, 0, 7);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ----- Station labels -----
+  ctx.font = `600 10px 'Martian Mono',monospace`;
+  ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+  for(const st of stationRender){
+    if(!st.top || st.top.scale < 0.15) continue;
+    const alpha = Math.min(1, st.top.scale * 3.5);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = P.plate;
+    const txt = st.n.n.toUpperCase();
+    const tw = ctx.measureText(txt).width;
+    ctx.fillRect(st.top.x - tw/2 - 3, st.top.y - 22, tw + 6, 14);
+    ctx.fillStyle = P.ink;
+    ctx.fillText(txt, st.top.x, st.top.y - 10);
+    if(st.traffic > 0){
+      ctx.fillStyle = catColor(st.n.c, Store.theme);
+      ctx.font = `700 9px 'Martian Mono',monospace`;
+      ctx.fillText(String(st.traffic), st.top.x, st.top.y - 24);
+      ctx.font = `600 10px 'Martian Mono',monospace`;
+    }
+    ctx.restore();
+  }
+
+  const real = Store.paths.filter(p=>!p.seeded).length;
+  meta.innerHTML = `<b>${Store.paths.length}</b> total paths &middot; <b>${real}</b> real casts<br>` +
+    `<b>${maxTraffic}</b> peak station traffic &middot; height ∝ traffic<sup>0.6</sup>`;
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---- Input --------------------------------------------------------------
+cv.addEventListener("pointerdown", e => {
+  // Middle button (button===1) pans. Anything else rotates.
+  dragMode = e.button === 1 ? "pan" : "rotate";
+  autoRotate = false;
+  dragStart = { x:e.clientX, y:e.clientY, yaw, pitch, panX, panY };
+  cv.setPointerCapture(e.pointerId);
+  if(dragMode === "pan") e.preventDefault();
+});
+cv.addEventListener("pointermove", e => {
+  if(!dragMode) return;
+  const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
+  if(dragMode === "pan"){
+    panX = dragStart.panX + dx;
+    panY = dragStart.panY + dy;
+  } else {
+    yaw = dragStart.yaw + dx * 0.005;
+    pitch = Math.max(-1.2, Math.min(0.1, dragStart.pitch - dy * 0.005));
+  }
+});
+const endDrag = () => { dragMode = null; };
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", endDrag);
+// Suppress the browser's default middle-click autoscroll on Windows.
+cv.addEventListener("auxclick", e => { if(e.button === 1) e.preventDefault(); });
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  dist = Math.max(600, Math.min(4500, dist * (e.deltaY > 0 ? 1.1 : 1/1.1)));
+}, {passive:false});
+
+addEventListener("keydown", e => {
+  if(e.key === "r" || e.key === "R"){
+    yaw = 0.62; pitch = -0.48; dist = 1750; panX = 0; panY = 0;
+  }
+  if(e.key === " "){ e.preventDefault(); autoRotate = !autoRotate; }
+  if(e.key === "p" || e.key === "P"){
+    const link = document.createElement("a");
+    link.download = `mood-topography-3d-${Date.now()}.png`;
+    link.href = cv.toDataURL("image/png");
+    link.click();
+  }
+});
+
+// ---- Curvature slider ---------------------------------------------------
+function updateCurve(){
+  curvature = (+curveSlider.value)/100;
+  curveVal.textContent = curveSlider.value + "%";
+}
+curveSlider.addEventListener("input", updateCurve);
+updateCurve();
+
+// ---- Corner buttons ------------------------------------------------------
+const pathsIconOn  = Icons.eyeOn;
+const pathsIconOff = Icons.eyeOff;
+corners.innerHTML =
+  `<button class="corner-btn icon-only" id="pathsBtn" title="Hide paths" aria-label="Hide paths">${pathsIconOn}</button>` +
+  `<button class="corner-btn icon-only" id="fitBtn"   title="Reset view">${Icons.fit}</button>` +
+  `<button class="corner-btn icon-only" id="themeBtn" title="Toggle theme">${Icons.theme}</button>`;
+const pathsBtn = document.getElementById("pathsBtn");
+document.getElementById("fitBtn").onclick = () => {
+  yaw = 0.62; pitch = -0.48; dist = 1750; panX = 0; panY = 0;
+};
+document.getElementById("themeBtn").onclick = () => Store.setTheme(Store.theme === "dark" ? "light" : "dark");
+pathsBtn.onclick = () => {
+  showPaths = !showPaths;
+  pathsBtn.innerHTML = showPaths ? pathsIconOn : pathsIconOff;
+  const label = showPaths ? "Hide paths" : "Show paths";
+  pathsBtn.title = label; pathsBtn.setAttribute("aria-label", label);
+};
+
+// ---- Shared nav ---------------------------------------------------------
+initQuickNav({current:"landscape", actions:[
+  {html: Icons.fit,   title:"Reset view",  onClick:()=>{ yaw=0.62; pitch=-0.48; dist=1750; panX=0; panY=0; }},
+  {html: Icons.theme, title:"Toggle theme", onClick:()=>Store.setTheme(Store.theme==="dark"?"light":"dark")}
+]});
+
+Store.sub(()=>{ document.documentElement.dataset.theme = Store.theme });
+Sync.hello();
+</script>
+</body>
+</html>

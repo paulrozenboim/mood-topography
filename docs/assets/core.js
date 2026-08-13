@@ -188,7 +188,10 @@ function _analyse(paths){
 
   // Truly unique paths for the "sole traveller" bulletin — every edge appears in
   // this path and NO other. Only then is "nobody else did" honest.
+  // Same pass counts EVERY such path (solitaryCount / solitaryIds), so the
+  // "alone in a crowd" bulletin can report the population.
   let solitary = null;
+  const solitaryIds = [];
   for(const p of paths){
     if(p.nodes.length<2) continue;
     let allUnique = true;
@@ -197,7 +200,42 @@ function _analyse(paths){
       const k=a<b?a+"-"+b:b+"-"+a;
       if((edges.get(k)||0) > 1){ allUnique=false; break }
     }
-    if(allUnique){ solitary=p; break }
+    if(allUnique){
+      if(!solitary) solitary=p;
+      solitaryIds.push(p.id);
+    }
+  }
+
+  // Distinct end stations, mirroring the anchorCount already tracked.
+  const endStationSet = new Set();
+  for(const p of paths){ if(p.nodes.length) endStationSet.add(p.nodes[p.nodes.length-1]) }
+  const endCount = endStationSet.size;
+
+  // Loop-shaped paths — anchor and end in the same mood family.
+  const loopIds = [];
+  for(const p of paths){
+    if(!p.nodes.length) continue;
+    const ac = NODES[p.nodes[0]].c;
+    const ec = NODES[p.nodes[p.nodes.length-1]].c;
+    if(ac === ec) loopIds.push(p.id);
+  }
+  const loopCount = loopIds.length;
+
+  // "Hinge" station — the one passed through most WITHOUT starting or ending.
+  // Anchor + end already anchor a station visually; transit is what makes it
+  // a connector rather than a destination.
+  let hingeStation = null, hingeCount = 0;
+  for(const n of NODES){
+    const t = (traffic[n.id]||0) - (anchors[n.id]||0) - (ends[n.id]||0);
+    if(t > hingeCount){ hingeCount = t; hingeStation = n; }
+  }
+
+  // Narrowest cross-mood transition still walked at least once tonight —
+  // where the map is thinnest.
+  let narrowestTransition = null;
+  const transferEntries = Object.entries(catTransfer);
+  if(transferEntries.length){
+    narrowestTransition = transferEntries.slice().sort((a,b)=>a[1]-b[1])[0];
   }
   const catTraffic={F:0,R:0,C:0,M:0};
   NODES.forEach(n=>{ catTraffic[n.c]+=traffic[n.id] });
@@ -220,6 +258,8 @@ function _analyse(paths){
           sampleAny, sampleMin, sampleMax, sampleRecent,
           singleCatIds, fourLineIds, widest, anchorCount:anchorSet.size,
           topTransfer, solitary,
+          endCount, loopCount, loopIds, solitaryCount:solitaryIds.length, solitaryIds,
+          hingeStation, hingeCount, narrowestTransition,
           repeatTop, repeatExample};
 }
 
@@ -383,8 +423,83 @@ function bulletins(A){
     const [from,to] = A.topTransfer[0].split(">");
     out.push({tag:"Signature transfer", accent:to,
       line:`The most common crossing tonight: from {${CATS[from].name}} to {${CATS[to].name}}.`,
-      sub:`${A.topTransfer[1]} steps between the two lines`,
+      sub:`${A.topTransfer[1]} steps between the two moods`,
       focus:{type:"cat", c:to, motion:"glow"}});
+  }
+
+  // --- Count-based bulletins (motion:"counts" draws a numeric pill on each station) ---
+
+  if(A.total > 0){
+    out.push({tag:"Foot traffic", accent:null,
+      line:`Every station's foot traffic tonight.`,
+      sub:`Number by each station = journeys that crossed it`,
+      focus:{type:"counts", counts:A.traffic, motion:"counts"}});
+  }
+
+  if(A.total > 0){
+    out.push({tag:"Where journeys begin",
+      line:`Where paths tonight anchored themselves.`,
+      sub:`Number by each station = journeys that started there`,
+      focus:{type:"counts", counts:A.anchors, motion:"counts"}});
+  }
+
+  if(A.total > 0){
+    out.push({tag:"Where journeys land",
+      line:`Where paths tonight arrived.`,
+      sub:`Number by each station = journeys that ended there`,
+      focus:{type:"counts", counts:A.ends, motion:"counts"}});
+  }
+
+  // --- Five more mined from the data ---
+
+  // 1. The hinge — most-crossed station that isn't a start or an end. The map's
+  //    connector, not its destination.
+  if(A.hingeStation && A.hingeCount >= 2){
+    out.push({tag:"The hinge", accent:A.hingeStation.c,
+      line:`{${A.hingeStation.n}} is the map's hinge tonight — {${A.hingeCount}} journeys cross it without stopping.`,
+      sub:`A connector, not a destination`,
+      focus:{type:"node", id:A.hingeStation.id, motion:"pulse"}});
+  }
+
+  // 2. Narrow crossing — the thinnest inter-mood transition still walked.
+  if(A.narrowestTransition && A.narrowestTransition[1] > 0
+     && (!A.topTransfer || A.narrowestTransition[0] !== A.topTransfer[0])){
+    const [key, count] = A.narrowestTransition;
+    const [from, to] = key.split(">");
+    out.push({tag:"Narrow crossing", accent:to,
+      line:`Only ${count} step${count===1?"":"s"} tonight moved from {${CATS[from].name}} to {${CATS[to].name}}.`,
+      sub:`The map's thinnest mood transition`,
+      focus:{type:"cat", c:to, motion:"glow"}});
+  }
+
+  // 3. Alone in a crowd — paths whose every segment is unique to them.
+  if(A.solitaryCount >= 1){
+    const many = A.solitaryCount === 1
+      ? `One journey tonight shares not a single segment with any other.`
+      : `${A.solitaryCount} journeys tonight share not a single segment with any other.`;
+    out.push({tag:"Alone in a crowd",
+      line:many,
+      sub:`Truly solitary routes across the map`,
+      focus:{type:"paths", ids:A.solitaryIds.slice(-5), motion:"cascade"}});
+  }
+
+  // 4. Return trips — anchor mood == destination mood. The shape of coming
+  //    back to where you started, without following the same route.
+  if(A.loopCount >= 2){
+    out.push({tag:"Return trips",
+      line:`${A.loopCount} of tonight's paths ended where they began — same mood, different way home.`,
+      sub:`A shape like a loop`,
+      focus:{type:"paths", ids:A.loopIds.slice(-5), motion:"cascade"}});
+  }
+
+  // 5. Where the map opens and closes — distinct anchor + end counts side by
+  //    side. Says something about spread: many starts vs one destination is a
+  //    convergence; few starts vs many destinations is a divergence.
+  if(A.anchorCount >= 2 && A.endCount >= 2){
+    out.push({tag:"Anchors and destinations",
+      line:`{${A.anchorCount}} stations tonight were a starting point. {${A.endCount}} were a destination.`,
+      sub:`Out of ${NODES.length} on the map`,
+      focus:{type:"counts", counts:A.anchors, motion:"counts"}});
   }
 
   // Network status — old wording said "unrepeated" but `distinct` = distinct
@@ -889,7 +1004,7 @@ class MapView{
     const key=[fs.toFixed(2),this.view.kx.toFixed(3),this.view.ky.toFixed(3),
                this.user.z.toFixed(3),this.user.dx|0,this.user.dy|0,this.w|0,this.h|0].join("_");
     if(this._lp && this._lp.key===key) return this._lp;
-    const ctx=this.ctx, dot=12.8;  // matches the max station radius (base 4.6 + up to 8.0 heat)
+    const ctx=this.ctx, dot=15.5;  // matches the max station radius (base 4.0 + up to 11.0 heat)
     ctx.save();
     ctx.font=`400 ${fs}px 'Martian Mono','SFMono-Regular',monospace`;
     const h=fs*1.18, g=5;
@@ -996,12 +1111,14 @@ class MapView{
     if(!this.opts.showAggregate){ this.dirty=false; return }
     const theme=this.theme, dark=theme==="dark";
     c.globalCompositeOperation = dark?"lighter":"multiply";
-    const g=this.gravity();
+    // gravity kept only for the animation-focused overlays' compatibility;
+    // aggregate paths now use straight catmull-rom (null gravity) so their
+    // curves match view.html's constellation and the archive thumbnails.
     const paths=this.visiblePaths();
     const focus=this.focus;
     const solo = Store.filter.type==="outlier";
     for(const p of paths){
-      const pts=splinePoints(pathPts(p), g).map(q=>this.toScreen(q));
+      const pts=splinePoints(pathPts(p), null).map(q=>this.toScreen(q));
       let a = p.seeded ? (dark?0.19:0.14) : (dark?0.36:0.27);
       let lw = p.seeded?1.1:1.9;
       if(solo){ a = dark?0.95:0.78; lw = 3.6 }
@@ -1046,13 +1163,22 @@ class MapView{
     // highlight that reads as visual noise.
     if(this.opts.showAggregate && this.focus && this.focus.type==="edge" && !this.focus.motion){
       const e=this.focus.e;
-      const pts=splinePoints([NODES[e.a],NODES[e.b]].map(n=>({x:n.x,y:n.y})), this.gravity()).map(q=>this.toScreen(q));
+      const pts=splinePoints([NODES[e.a],NODES[e.b]].map(n=>({x:n.x,y:n.y})), null).map(q=>this.toScreen(q));
       ctx.save(); ctx.globalCompositeOperation=dark?"lighter":"source-over";
       ctx.strokeStyle=catColor(NODES[e.a].c,theme); ctx.lineWidth=4; ctx.globalAlpha=.55+Math.sin(this.pulse*2.4)*.2;
       ctx.beginPath(); pts.forEach((q,i)=> i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y)); ctx.stroke(); ctx.restore();
     }
     if(this.opts.showAggregate && this.focus && this.focus.motion){
-      this.drawMotion(ctx, ts, theme, dark);
+      // Guard the motion draw — any exception here would prevent the frame
+      // from reaching requestAnimationFrame() at the bottom of loop() and the
+      // map would freeze permanently. Log once and drop the focus so we don't
+      // repeat the same error next frame.
+      try{
+        this.drawMotion(ctx, ts, theme, dark);
+      }catch(e){
+        console.warn("drawMotion error, clearing focus:", e);
+        this.focus = null;
+      }
     }
 
     const A=this.A;
@@ -1097,10 +1223,10 @@ class MapView{
       }
       // stations must read clearly as "stations" from a projector at the back of a room even
       // with zero data — traffic makes them bigger and brighter, it must never be what makes
-      // them visible at all. Base 4.6 (idle) → up to 12.6 (highest-traffic) before focus
-      // scaling; heat coefficient bumped from 5 → 8 so busier stations pull visibly ahead
-      // of the pack, while the base stays small enough that labels don't collide.
-      const r=(4.6+heat*8.0)*(this.opts.role==="tablet"?1.2:1)*focusScale;
+      // them visible at all. Range widened: idle 4.0 → busiest ~15.0 (base +11*heat),
+      // giving a ~3.8× ratio between "nobody's been here" and "everybody's been here",
+      // sharpening the visual signal without pushing labels off-screen.
+      const r=(4.0+heat*11.0)*(this.opts.role==="tablet"?1.2:1)*focusScale;
 
       if(this.opts.showAggregate && heat>0.05 && !this.opts.interactive){
         const ph=((this.pulse*0.5)+(n.id*0.137))%1;
@@ -1172,7 +1298,7 @@ class MapView{
 
     if(inj && this.opts.showAggregate){
       const e=(ts-inj.t0)/1000;
-      const pts=splinePoints(pathPts(inj.path), this.gravity()).map(q=>this.toScreen(q));
+      const pts=splinePoints(pathPts(inj.path), null).map(q=>this.toScreen(q));
       const cats=inj.path.nodes.map(i=>NODES[i].c);
       // colour cues at the head/ring use the tip's colour (the station the reveal
       // is currently arriving at), matching the last-drawn segment's end.
@@ -1229,26 +1355,38 @@ class MapView{
     // this guard covers any other scenario that sets focus mid-injection.)
     if(this.inject) return;
     const T = (ts - (this.focusT0||ts)) / 1000;
-    const g = this.gravity();
+    // Motion overlays draw with null gravity too — same catmull-rom shape as
+    // the aggregate paths below and as view.html's constellation, so a focused
+    // traverse or cascade doesn't visually drift from the underlying artery.
+    const g = null;
 
     // -- helpers ----------------------------------------------------------
     const traverseAlong = (worldIds, cycleSec, col) => {
       if(!worldIds || worldIds.length<2) return;
-      const wp = worldIds.map(i=>NODES[i]);
+      // Filter out any bad station IDs before mapping to coordinates. A cast
+      // that references a station no longer in NODES (renamed, edge race with
+      // a path removal, corrupt sync payload) used to produce undefined entries
+      // that later crashed at sp[idx].x — killing the whole render loop.
+      const wp = worldIds.map(i=>NODES[i]).filter(Boolean);
+      if(wp.length < 2) return;
       const sp = splinePoints(wp.map(p=>({x:p.x,y:p.y})), g).map(q=>this.toScreen(q));
+      if(!sp.length) return;
       const t = (T % cycleSec) / cycleSec;
-      const idx = Math.min(sp.length-1, Math.floor(t * (sp.length-1)));
+      const idx = Math.max(0, Math.min(sp.length-1, Math.floor(t * (sp.length-1))));
       const trailLen = Math.min(28, idx);
       ctx.save();
       ctx.globalCompositeOperation = dark?"lighter":"source-over";
       ctx.strokeStyle = col; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.lineWidth = 3.4;
       for(let i=idx-trailLen; i<idx; i++){
-        if(i<0) continue;
+        if(i<0 || i+1>=sp.length) continue;
+        const p0 = sp[i], p1 = sp[i+1];
+        if(!p0 || !p1) continue;
         const a = (i - (idx-trailLen))/trailLen;
         ctx.globalAlpha = a*a * (dark?0.95:0.7);
-        ctx.beginPath(); ctx.moveTo(sp[i].x,sp[i].y); ctx.lineTo(sp[i+1].x,sp[i+1].y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke();
       }
       const h = sp[idx];
+      if(!h){ ctx.restore(); return; }        // last-line-of-defence
       ctx.globalAlpha = 0.35;
       ctx.beginPath(); ctx.arc(h.x, h.y, 16, 0, 7);
       ctx.fillStyle = col; ctx.fill();
@@ -1337,6 +1475,70 @@ class MapView{
         ctx.fillStyle = dark?"#fff":catColor(tipCat, theme); ctx.fill();
         ctx.restore();
       }
+    }
+    else if(f.motion === "counts"){
+      // Numeric pill per station, sequenced reveal — biggest counts first.
+      // Sort once by descending count, then reveal them across the first
+      // ~5 s of the bulletin so the busy stations lead and the quieter ones
+      // filter in behind. Each pill fades in over its own ~0.35 s window.
+      const counts = f.counts || [];
+      const items = [];
+      for(let i=0; i<NODES.length; i++){
+        const c = counts[i]|0;
+        if(c <= 0) continue;
+        items.push({id:i, c});
+      }
+      if(!items.length) return;
+      items.sort((a,b)=> b.c - a.c);
+      const REVEAL_DUR = 5.0;                 // seconds to reveal every pill
+      const FADE = 0.35;                       // per-pill fade-in duration
+      const step = items.length > 1 ? (REVEAL_DUR - FADE) / (items.length - 1) : 0;
+
+      const PILL_FS = 11;
+      ctx.save();
+      ctx.font = `700 ${PILL_FS}px 'Martian Mono',monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      for(let rank=0; rank<items.length; rank++){
+        const {id, c} = items[rank];
+        const revealAt = rank * step;
+        const localT = T - revealAt;
+        if(localT <= 0) continue;              // not revealed yet
+        const alpha = Math.min(1, localT / FADE);
+        const n = NODES[id]; const s = this.toScreen(n);
+        const txt = String(c);
+        const tw = ctx.measureText(txt).width;
+        const padX = 5, padY = 2, w = tw + padX*2, h = PILL_FS + padY*2 + 2;
+        // Also grow the pill from a small centre while fading in — reads as
+        // "the number popped into place" rather than just appearing.
+        const scale = 0.65 + 0.35 * alpha;
+        const cx = s.x + 10 + w/2, cy = s.y - h - 6 + h/2;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy);
+        const px = s.x + 10, py = s.y - h - 6;
+        const bg = catColor(n.c, theme);
+        ctx.fillStyle = bg;
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const rad = 3;
+        ctx.moveTo(px+rad, py);
+        ctx.lineTo(px+w-rad, py);
+        ctx.quadraticCurveTo(px+w, py, px+w, py+rad);
+        ctx.lineTo(px+w, py+h-rad);
+        ctx.quadraticCurveTo(px+w, py+h, px+w-rad, py+h);
+        ctx.lineTo(px+rad, py+h);
+        ctx.quadraticCurveTo(px, py+h, px, py+h-rad);
+        ctx.lineTo(px, py+rad);
+        ctx.quadraticCurveTo(px, py, px+rad, py);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#fff";
+        ctx.fillText(txt, px + w/2, py + h/2 + 0.5);
+        ctx.restore();
+      }
+      ctx.restore();
     }
   }
 }

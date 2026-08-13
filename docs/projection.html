@@ -46,12 +46,59 @@ Object.entries(CATS).forEach(([k,v])=>{
 
 const tag=document.getElementById("tag"), line=document.getElementById("line"), sub=document.getElementById("sub");
 const stats=document.getElementById("stats");
+// Bulletin transport state — governs the auto-rotation loop below.
+let paused = false, bulletinHidden = false;
+
 initQuickNav({current:"projection", actions:[
-  {html: Icons.fit,   title:"Fit view",     onClick:()=>view.resetView()},
-  {html: Icons.theme, title:"Toggle theme", onClick:()=>Store.setTheme(Store.theme==="dark"?"light":"dark")}
+  {html: Icons.fit,   title:"Fit view",          onClick:()=>view.resetView()},
+  {html: Icons.prev,  title:"Previous bulletin", onClick:()=>prevBulletin()},
+  {html: Icons.pause, title:"Pause bulletin",    onClick:()=>togglePause()},
+  {html: Icons.next,  title:"Next bulletin",     onClick:()=>nextBulletin()},
+  {html: Icons.eyeOn, title:"Hide bulletin",     onClick:()=>toggleBulletinVisibility()},
+  {html: Icons.theme, title:"Toggle theme",      onClick:()=>Store.setTheme(Store.theme==="dark"?"light":"dark")}
 ]});
 
+// Grab refs to the transport / visibility buttons so we can swap their icons
+// when their state flips. Located via aria-label (set by initQuickNav from the
+// title field on each action).
+const transportBtn  = document.querySelector('.quicknav [aria-label="Pause bulletin"]');
+const visibilityBtn = document.querySelector('.quicknav [aria-label="Hide bulletin"]');
+
 let queue=[], qi=0, lastSwap=0, current=null;
+
+function togglePause(){
+  paused = !paused;
+  if(!transportBtn) return;
+  transportBtn.innerHTML = paused ? Icons.play : Icons.pause;
+  const label = paused ? "Play bulletin" : "Pause bulletin";
+  transportBtn.title = label;
+  transportBtn.setAttribute("aria-label", label);
+}
+function nextBulletin(){
+  if(!queue.length) rebuild();
+  if(!queue.length) return;
+  paint(queue[qi % queue.length]);
+  qi++;
+  lastSwap = performance.now();
+}
+function prevBulletin(){
+  if(!queue.length) rebuild();
+  if(!queue.length) return;
+  // qi points at the NEXT bulletin, so "previous" is qi-2 relative to that.
+  qi = (qi - 2 + queue.length) % queue.length;
+  paint(queue[qi % queue.length]);
+  qi++;
+  lastSwap = performance.now();
+}
+function toggleBulletinVisibility(){
+  bulletinHidden = !bulletinHidden;
+  bulletinBar.classList.toggle("collapsed", bulletinHidden);
+  if(!visibilityBtn) return;
+  visibilityBtn.innerHTML = bulletinHidden ? Icons.eyeOff : Icons.eyeOn;
+  const label = bulletinHidden ? "Show bulletin" : "Hide bulletin";
+  visibilityBtn.title = label;
+  visibilityBtn.setAttribute("aria-label", label);
+}
 const reduced=matchMedia("(prefers-reduced-motion:reduce)").matches;
 const GLYPH="▚▞▛▜▙▟█▖▗▘▝";
 function scramble(node, text){
@@ -92,7 +139,9 @@ function paint(b){
 function rebuild(){ queue=bulletins(view.A||analyse(Store.paths)); if(qi>=queue.length) qi=0 }
 function tick(ts){
   if(!queue.length) rebuild();
-  if(ts-lastSwap > (current&&current.hold?11000:8500)){
+  // Paused: freeze the auto-rotation entirely. Next/prev clicks still advance
+  // manually since they call paint() + set lastSwap themselves.
+  if(!paused && ts-lastSwap > (current&&current.hold?11000:8500)){
     lastSwap=ts; rebuild();
     if(queue.length){ paint(queue[qi%queue.length]); qi++ }
   }

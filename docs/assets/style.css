@@ -89,13 +89,20 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .proj-stats-side span{display:block;font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.14em;
   text-transform:uppercase;color:var(--ink-2);margin-top:2px}
 .bulletin-bar{flex:none;height:clamp(148px,20vh,206px);padding:var(--pad);border-top:var(--rail) solid var(--hair);
-  display:flex;flex-direction:column;justify-content:center;gap:9px;overflow:hidden}
+  display:flex;flex-direction:column;justify-content:center;gap:9px;overflow:hidden;
+  transition:height .35s var(--ease), padding .35s var(--ease), border-top-width .35s var(--ease), opacity .3s var(--ease)}
+.bulletin-bar.collapsed{height:0!important;padding-top:0!important;padding-bottom:0!important;
+  border-top-width:0!important;opacity:0}
 .bulletin-bar .bar{display:flex;align-items:flex-start;gap:14px}
 .bulletin-bar .tag{flex:none;margin-top:3px;font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.2em;
   text-transform:uppercase;color:var(--bg);background:var(--ink);padding:4px 7px 3px}
 .bulletin-bar .line{font-size:clamp(19px,3.1vw,40px);line-height:1.15;font-weight:800;
   font-variation-settings:'wdth' 122;letter-spacing:-.012em;text-transform:uppercase;
-  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
+  /* text-wrap: balance splits the two lines evenly so a single trailing word
+     doesn't dangle on the second line. Modern browsers (Chrome 114+, Safari
+     17.4+, Firefox 121+); older ones fall back to normal word wrap. */
+  text-wrap:balance}
 .bulletin-bar .line .hi{color:var(--accent,var(--ink))}
 .bulletin-bar .sub{font-family:'Martian Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--ink-3);
   text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

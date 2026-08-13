@@ -13,7 +13,8 @@ function initQuickNav({current, actions=[]}={}){
     ["tablet.html","Cast Path","tablet"],
     ["projection.html","Projection","projection"],
     ["settings.html","Settings","settings"],
-    ["archive.html","Archive","archive"]
+    ["archive.html","Archive","archive"],
+    ["landscape.html","Landscape","landscape"]
   ];
   const handle=document.createElement("button");
   handle.className="nav-handle"; handle.type="button";
@@ -26,7 +27,9 @@ function initQuickNav({current, actions=[]}={}){
     bar.appendChild(a);
   });
   if(actions.length){
-    const divider=document.createElement("span"); divider.className="nav-div"; bar.appendChild(divider);
+    // No explicit nav-div separator between pages and actions — the
+    // border-right on each item already provides a visual break, and the
+    // extra vertical bar read as a mistake.
     actions.forEach(({label, html, onClick, title})=>{
       const b=document.createElement("button"); b.type="button"; b.className="nav-action";
       // Prefer html (for SVG icons); fall back to plain text label.

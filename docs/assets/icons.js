@@ -39,6 +39,43 @@ const Icons = {
       '<path d="M18 14 V18 H14"/>' +
     '</svg>',
 
+  // Media-player triangles for the bulletin transport.
+  play:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="currentColor">' +
+      '<path d="M5.5 3.5 v13 L16 10 Z"/>' +
+    '</svg>',
+
+  pause:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="currentColor">' +
+      '<rect x="5"  y="4" width="3.5" height="12"/>' +
+      '<rect x="11.5" y="4" width="3.5" height="12"/>' +
+    '</svg>',
+
+  prev:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="currentColor">' +
+      '<rect x="4" y="4" width="2" height="12"/>' +
+      '<path d="M17 3.5 v13 L7.5 10 Z"/>' +
+    '</svg>',
+
+  next:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="currentColor">' +
+      '<rect x="14" y="4" width="2" height="12"/>' +
+      '<path d="M3 3.5 v13 L12.5 10 Z"/>' +
+    '</svg>',
+
+  // Eye / eye-off — toggles the bulletin bar visibility.
+  eyeOn:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M2 10 C 4.5 5, 7.5 4, 10 4 C 12.5 4, 15.5 5, 18 10 C 15.5 15, 12.5 16, 10 16 C 7.5 16, 4.5 15, 2 10 Z"/>' +
+      '<circle cx="10" cy="10" r="2.5" fill="currentColor" stroke="none"/>' +
+    '</svg>',
+
+  eyeOff:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M2 10 C 4.5 5, 7.5 4, 10 4 C 12.5 4, 15.5 5, 18 10 C 15.5 15, 12.5 16, 10 16 C 7.5 16, 4.5 15, 2 10 Z"/>' +
+      '<path d="M4 4 L 16 16" stroke-width="2"/>' +
+    '</svg>',
+
   // Trash / delete — reused by the archive card delete.
   trash:
     '<svg class="icon" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
