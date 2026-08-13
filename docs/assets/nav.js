@@ -27,8 +27,12 @@ function initQuickNav({current, actions=[]}={}){
   });
   if(actions.length){
     const divider=document.createElement("span"); divider.className="nav-div"; bar.appendChild(divider);
-    actions.forEach(({label,onClick})=>{
-      const b=document.createElement("button"); b.type="button"; b.textContent=label;
+    actions.forEach(({label, html, onClick, title})=>{
+      const b=document.createElement("button"); b.type="button"; b.className="nav-action";
+      // Prefer html (for SVG icons); fall back to plain text label.
+      if(html) b.innerHTML = html; else b.textContent = label;
+      if(title) b.title = title;
+      if(title) b.setAttribute("aria-label", title);
       b.addEventListener("click", onClick);
       bar.appendChild(b);
     });

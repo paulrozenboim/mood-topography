@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Topography of Us — Settings</title>
+<title>The Mood Topography — Settings</title>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -76,6 +76,7 @@
     </div>
   </div>
 </div>
+<script src="assets/icons.js"></script>
 <script src="assets/remote-config.js"></script>
 <script src="assets/store.js"></script>
 <script src="assets/core.js"></script>
@@ -136,7 +137,7 @@ function refresh(){
 
   const isDark = Store.theme === "dark";
   themeBtn.setAttribute("aria-pressed", isDark ? "true" : "false");
-  themeBtn.innerHTML = `Theme: ${isDark ? "Dark" : "Light"}<b>click to switch to ${isDark ? "light" : "dark"} everywhere</b>`;
+  themeBtn.innerHTML = `${Icons.theme} Theme: ${isDark ? "Dark" : "Light"}<b>click to switch to ${isDark ? "light" : "dark"} everywhere</b>`;
 
   const A=analyse(Store.paths);
   ro.innerHTML = A.total

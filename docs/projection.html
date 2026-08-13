@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>The Topography of Us — Live wall</title>
+<title>The Mood Topography — Live wall</title>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
   <div class="canvas-wrap">
     <canvas id="cv"></canvas>
     <div class="proj-head">
-      <div class="proj-title">The Topography of Us<small>Live civic map · Teder, Tel Aviv</small></div>
+      <div class="proj-title">The Mood Topography<small>Live civic map · Teder, Tel Aviv</small></div>
     </div>
     <div class="proj-stats-side" id="stats"></div>
     <div class="legend" id="legend"></div>
@@ -21,6 +21,7 @@
     <div class="sub" id="sub"></div>
   </div>
 </div>
+<script src="assets/icons.js"></script>
 <script src="assets/remote-config.js"></script>
 <script src="assets/store.js"></script>
 <script src="assets/core.js"></script>
@@ -33,6 +34,11 @@ const cv=document.getElementById("cv");
 const view=new MapView(cv,{role:"projection", labels:true, showAggregate:true, navigable:true});
 
 const legend=document.getElementById("legend");
+// Small title above the coloured swatches so a viewer parses the block as
+// "these are the four mood families the map is organised around", not as an
+// arbitrary color key.
+const legendTitle=el("div","legend-title","Moods");
+legend.appendChild(legendTitle);
 Object.entries(CATS).forEach(([k,v])=>{
   const d=el("div"); const i=el("i"); i.style.background=v.color; d.appendChild(i);
   d.appendChild(el("span",null,v.name)); legend.appendChild(d);
@@ -41,8 +47,8 @@ Object.entries(CATS).forEach(([k,v])=>{
 const tag=document.getElementById("tag"), line=document.getElementById("line"), sub=document.getElementById("sub");
 const stats=document.getElementById("stats");
 initQuickNav({current:"projection", actions:[
-  {label:"Fit", onClick:()=>view.resetView()},
-  {label:"Theme", onClick:()=>Store.setTheme(Store.theme==="dark"?"light":"dark")}
+  {html: Icons.fit,   title:"Fit view",     onClick:()=>view.resetView()},
+  {html: Icons.theme, title:"Toggle theme", onClick:()=>Store.setTheme(Store.theme==="dark"?"light":"dark")}
 ]});
 
 let queue=[], qi=0, lastSwap=0, current=null;
@@ -98,7 +104,11 @@ function tick(ts){
 }
 requestAnimationFrame(tick);
 
-const AUTO=[{type:"all"},{type:"recent"},{type:"heaviest"},{type:"cat",c:"F"},{type:"all"},{type:"cat",c:"M"},{type:"outlier"}];
+// "outlier" removed from the rotation on purpose — it hides everything else
+// on the map, and the Sole-Traveller bulletin ("Nobody else did") reads much
+// better against a dimmed crowd than against a blank map. Filter stays
+// available in Settings for manual VJ use, just not in the auto cycle.
+const AUTO=[{type:"all"},{type:"recent"},{type:"heaviest"},{type:"cat",c:"F"},{type:"all"},{type:"cat",c:"M"}];
 let ai=0;
 setInterval(()=>{ if(!Store.auto) return; ai=(ai+1)%AUTO.length; Store.setFilter(AUTO[ai]) },14000);
 

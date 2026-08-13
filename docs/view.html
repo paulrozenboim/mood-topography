@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>The Topography of Us — Your constellation</title>
+<title>The Mood Topography — Your constellation</title>
 <link rel="stylesheet" href="assets/style.css">
 <style>
   html,body{overflow:auto}
@@ -15,10 +15,9 @@
   .viewer .head-actions{display:flex;gap:6px;flex-shrink:0}
   .viewer .head-btn{display:inline-flex;align-items:center;justify-content:center;
     width:34px;height:34px;background:none;border:none;color:var(--ink-2);cursor:pointer;
-    box-shadow:inset 0 0 0 1px var(--hair);font-size:14px;line-height:1;padding:0;
-    font-family:'Martian Mono',monospace}
+    box-shadow:inset 0 0 0 1px var(--hair);line-height:1;padding:0}
   .viewer .head-btn:hover{color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink-3)}
-  .viewer .head-btn.wide{width:auto;padding:0 12px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
+  .viewer .head-btn .icon{width:16px;height:16px}
   .viewer .const{position:relative;flex:1;min-height:clamp(320px,60vh,540px);
     box-shadow:inset 0 0 0 1px var(--hair)}
   /* Canvas draws the constellation but is never actually shown — the drawing is
@@ -39,6 +38,19 @@
     font-size:11px;line-height:1.7}
   .empty a{color:var(--ink);text-decoration:underline}
 
+  /* QR overlay — click Show QR to reveal a big, hold-up-to-someone-else QR
+     encoding this page's URL. Clicking anywhere closes it. */
+  .qr-veil{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.75);
+    display:flex;align-items:center;justify-content:center;padding:32px;
+    opacity:0;pointer-events:none;transition:opacity .2s var(--ease)}
+  .qr-veil.on{opacity:1;pointer-events:auto}
+  .qr-panel{background:#fff;padding:20px;box-shadow:0 30px 80px rgba(0,0,0,.5);
+    display:flex;flex-direction:column;align-items:center;gap:12px;max-width:min(360px,90vw)}
+  .qr-panel canvas{display:block}
+  .qr-panel .qr-cap{font-family:'Martian Mono',monospace;font-size:9.5px;color:#333;
+    letter-spacing:.08em;text-align:center;word-break:break-all;line-height:1.5}
+  .qr-panel .qr-cap b{color:#111}
+
   /* --- Print: thermal receipt layout for view.html (used by archive.html's
      Print button which navigates here with ?print=1 and auto-fires window.print).
      Mirrors the tablet's receipt: title, constellation, credits, ~70mm wide. --- */
@@ -48,7 +60,7 @@
     body *{visibility:hidden}
     .viewer{padding:0!important;max-width:none!important;margin:0!important;display:block!important;min-height:0!important}
     .viewer *{visibility:visible;color:#000!important}
-    .viewer .head-actions, .viewer .hint{display:none!important}
+    .viewer .head-actions, .viewer .hint, .qr-veil{display:none!important}
     .viewer header{display:block!important;text-align:center;padding:0!important;margin:0 0 2mm 0!important;border:none!important}
     .viewer h1{font-size:14pt!important;font-weight:800!important;line-height:1.1!important;margin:0!important}
     .viewer .head-l .eyebrow{display:none!important}
@@ -75,8 +87,9 @@
       <div class="eyebrow">Teder · Tel Aviv</div>
     </div>
     <div class="head-actions" id="headActions">
-      <button class="head-btn" id="themeBtn" type="button" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
-      <button class="head-btn wide" id="printBtn" type="button" title="Print this constellation">Print</button>
+      <button class="head-btn" id="themeBtn" type="button" title="Toggle light / dark" aria-label="Toggle theme"></button>
+      <button class="head-btn" id="qrBtn"    type="button" title="Show QR to share" aria-label="Show QR"></button>
+      <button class="head-btn" id="printBtn" type="button" title="Print this constellation" aria-label="Print"></button>
     </div>
   </header>
   <div class="const" id="constWrap">
@@ -86,7 +99,7 @@
   <div class="stops" id="stops"></div>
   <p class="hint" id="hint"><b>Long-press the image to save it.</b> This link stays live — you can come back to it, share it, or open it on another device.</p>
   <div class="credits">
-    <div class="row"><b>The Topography of Us</b><span>Democracy Week · Tel Aviv · 2026</span></div>
+    <div class="row"><b>The Mood Topography</b><span>Democracy Week · Tel Aviv · 2026</span></div>
     <div class="row"><span>Cast at Teder</span><span id="castDate"></span></div>
     <a class="row row-link" href="https://www.instagram.com/unapaulogetic_" target="_blank" rel="noopener">
       <span>Made by <b>@unapaulogetic_</b></span>
@@ -95,8 +108,18 @@
   </div>
 </div>
 
+<div class="qr-veil" id="qrVeil">
+  <div class="qr-panel">
+    <canvas id="shareQR"></canvas>
+    <div class="qr-cap"><b>Scan to open this constellation</b><br><span id="shareURL"></span></div>
+  </div>
+</div>
+
+<script src="assets/icons.js"></script>
+<script src="assets/remote-config.js"></script>
 <script src="assets/store.js"></script>
 <script src="assets/core.js"></script>
+<script src="assets/qrcode.min.js"></script>
 <script>
 "use strict";
 const wrap=document.getElementById("wrap");
@@ -104,25 +127,30 @@ const star=document.getElementById("star");
 const stops=document.getElementById("stops");
 const title=document.getElementById("title");
 const themeBtn=document.getElementById("themeBtn");
+const qrBtn   =document.getElementById("qrBtn");
 const printBtn=document.getElementById("printBtn");
+const qrVeil  =document.getElementById("qrVeil");
+const shareQR =document.getElementById("shareQR");
+const shareURL=document.getElementById("shareURL");
 
-// Theme: pull from localStorage first (participant's manual choice sticks across
-// visits on the same device); fall back to the phone's OS preference on a first
-// visit. Manual toggle takes over from OS.
-const THEME_KEY = "topo-view-theme";
-const osPrefersDark = matchMedia("(prefers-color-scheme: dark)").matches;
-let theme = localStorage.getItem(THEME_KEY) || (osPrefersDark ? "dark" : "light");
-document.documentElement.dataset.theme = theme;
+// Ice the icons in before anything else touches the buttons.
+themeBtn.innerHTML = Icons.theme;
+qrBtn.innerHTML    = Icons.qr;
+printBtn.innerHTML = Icons.print;
+
+// Theme mirrors the unified operator theme (Store.theme). On phones connected
+// to the same Firebase / local relay, that means the participant's page follows
+// whatever the operator has active on the wall. Tapping the toggle here fires
+// Store.setTheme, which propagates back — one theme, all surfaces.
+document.documentElement.dataset.theme = Store.theme;
+Store.sub(()=>{ document.documentElement.dataset.theme = Store.theme });
 
 function readHash(){
   const h = location.hash.replace(/^#/, "");
   const params = new URLSearchParams(h);
   return {p: params.get("p") || "", t: params.get("t") || ""};
 }
-
-function readQuery(){
-  return new URLSearchParams(location.search);
-}
+function readQuery(){ return new URLSearchParams(location.search) }
 
 function showEmpty(msg){
   wrap.innerHTML = `<div class="empty">${msg}<br><br><a href="tablet.html">Trace one on the Cast Path page →</a></div>`;
@@ -140,7 +168,7 @@ if(!ids.length){
   const paintStops = () => {
     stops.innerHTML = ids.map((id,i)=>{
       const n=NODES[id];
-      return `<span><i style="background:${catColor(n.c,theme)}"></i>${i+1}. ${n.n}</span>`;
+      return `<span><i style="background:${catColor(n.c,Store.theme)}"></i>${i+1}. ${n.n}</span>`;
     }).join("");
   };
   paintStops();
@@ -158,10 +186,10 @@ if(!ids.length){
   // participant's camera roll.
   const starImg = document.getElementById("starImg");
   const drawScreen = () => {
-    renderConstellation(star, ids, theme);
+    renderConstellation(star, ids, Store.theme);
     try{ starImg.src = star.toDataURL("image/png") }catch(_){}
   };
-  const drawPrint = () => renderConstellation(star, ids, theme, {print:true});
+  const drawPrint = () => renderConstellation(star, ids, Store.theme, {print:true});
   requestAnimationFrame(drawScreen);
 
   // Re-export on resize so the saved image matches whatever the viewer is looking at.
@@ -171,28 +199,37 @@ if(!ids.length){
     resizeT = setTimeout(()=>requestAnimationFrame(drawScreen), 120);
   });
 
-  // Theme toggle — repaints constellation and stop chips with new palette
+  // Theme toggle drives the unified Store.theme — the operator's page updates
+  // via Sync too. The Store.sub above then re-triggers our repaint locally.
   themeBtn.onclick = () => {
-    theme = theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem(THEME_KEY, theme);
+    Store.setTheme(Store.theme === "dark" ? "light" : "dark");
     paintStops();
     requestAnimationFrame(drawScreen);
   };
 
-  // Print: swap canvas to print-mode (pure greys, no starfield, higher DPR,
-  // aspect-fit) → open browser print dialog → restore screen render after.
+  // Print flow (thermal-friendly print CSS above kicks in on window.print()).
   printBtn.onclick = () => window.print();
   window.addEventListener("beforeprint", drawPrint);
   window.addEventListener("afterprint", drawScreen);
-  // Some browsers apply print styles after beforeprint fires; a rAF-deferred
-  // second draw catches that timing.
   try{
     matchMedia("print").addEventListener("change", e => {
       if(e.matches) requestAnimationFrame(drawPrint);
       else requestAnimationFrame(drawScreen);
     });
   }catch(_){}
+
+  // QR overlay — encodes this page's URL so the participant can hold their
+  // phone up and let someone else's phone scan the constellation without
+  // needing to type or share a link.
+  function openQR(){
+    const url = location.href;
+    renderQR(shareQR, url, 220);
+    shareURL.textContent = url;
+    qrVeil.classList.add("on");
+  }
+  function closeQR(){ qrVeil.classList.remove("on") }
+  qrBtn.onclick = openQR;
+  qrVeil.addEventListener("click", closeQR);
 
   // ?print=1 (used by the Archive page's print button) auto-opens the browser
   // print dialog after the constellation has had a beat to render.

@@ -315,9 +315,9 @@ function bulletins(A){
   }
   const catT=Object.entries(A.catTraffic).sort((a,b)=>b[1]-a[1]);
   if(catT[0][1]>0){
-    out.push({tag:"Heaviest line", accent:catT[0][0],
+    out.push({tag:"Heaviest mood", accent:catT[0][0],
       line:`{${CATS[catT[0][0]].name}} carries the most foot traffic tonight.`,
-      sub:`${catT[0][1]} station crossings on that line alone`,
+      sub:`${catT[0][1]} station crossings within that mood alone`,
       focus:{type:"cat", c:catT[0][0], motion:"glow"}});
   }
   if(A.recentCount>0 && A.sampleRecent.length){
@@ -348,16 +348,16 @@ function bulletins(A){
                        .sort((a,b)=>b[1].length-a[1].length);
   if(stayed[0]){
     const [c,ids]=stayed[0];
-    out.push({tag:"Stayed on one line", accent:c,
-      line:`${ids.length} of you stayed entirely on {${CATS[c].name}}.`,
-      sub:"Never crossed to another line",
+    out.push({tag:"Stayed on one mood", accent:c,
+      line:`${ids.length} of you stayed entirely in {${CATS[c].name}}.`,
+      sub:"Never crossed to another mood",
       focus:{type:"cat", c, motion:"glow"}});
   }
 
   // Touched every line — paths spanning F, R, C, M
   if(A.fourLineIds.length){
-    out.push({tag:"Touched every line",
-      line:`${A.fourLineIds.length} of you crossed all four lines in one path.`,
+    out.push({tag:"Touched every mood",
+      line:`${A.fourLineIds.length} of you crossed all four moods in one path.`,
       sub:"The full width of the map, in a single journey",
       focus:{type:"paths", ids:A.fourLineIds.slice(-5), motion:"cascade"}});
   }
@@ -437,7 +437,7 @@ function castBulletin(newPath, allPaths){
       new Set(p.nodes.map(i => NODES[i].c)).size === 4
     ).length;
     return {tag:"Full spectrum", accent:dest.c,
-      line:`This path touches all four lines — ${priorFour ? "one of "+(priorFour+1) : "the first"} tonight to do so.`,
+      line:`This path touches all four moods — ${priorFour ? "one of "+(priorFour+1) : "the first"} tonight to do so.`,
       sub:newPath.nodes.map(i=>NODES[i].n).join("  →  "),
       focus:{type:"path", id:newPath.id, motion:"traverse"}, hold:true};
   }
@@ -475,9 +475,9 @@ function castBulletin(newPath, allPaths){
       new Set(p.nodes.map(i=>NODES[i].c)).size === 1 &&
       NODES[p.nodes[0]].c === c
     ).length;
-    return {tag:"Stayed on one line", accent:c,
+    return {tag:"Stayed on one mood", accent:c,
       line:`This journey never left {${CATS[c].name}}.`,
-      sub:sameLine ? `${sameLine + 1} of tonight's paths kept to that line` : "The first single-line path of the night",
+      sub:sameLine ? `${sameLine + 1} of tonight's paths kept to that mood` : "The first single-mood path of the night",
       focus:{type:"cat", c, motion:"glow"}};
   }
 
@@ -889,7 +889,7 @@ class MapView{
     const key=[fs.toFixed(2),this.view.kx.toFixed(3),this.view.ky.toFixed(3),
                this.user.z.toFixed(3),this.user.dx|0,this.user.dy|0,this.w|0,this.h|0].join("_");
     if(this._lp && this._lp.key===key) return this._lp;
-    const ctx=this.ctx, dot=9.8;   // matches the larger station radius (base 4.6 + up to 5.0 heat)
+    const ctx=this.ctx, dot=12.8;  // matches the max station radius (base 4.6 + up to 8.0 heat)
     ctx.save();
     ctx.font=`400 ${fs}px 'Martian Mono','SFMono-Regular',monospace`;
     const h=fs*1.18, g=5;
@@ -1040,7 +1040,11 @@ class MapView{
       ctx.restore();
     }
 
-    if(this.opts.showAggregate && this.focus && this.focus.type==="edge"){
+    // Legacy pulsing edge highlight — only used when the edge has NO motion.
+    // If focus.motion is set (traverse), drawMotion draws the moving trail on
+    // the same edge, and adding this stroke on top produces a jittery double
+    // highlight that reads as visual noise.
+    if(this.opts.showAggregate && this.focus && this.focus.type==="edge" && !this.focus.motion){
       const e=this.focus.e;
       const pts=splinePoints([NODES[e.a],NODES[e.b]].map(n=>({x:n.x,y:n.y})), this.gravity()).map(q=>this.toScreen(q));
       ctx.save(); ctx.globalCompositeOperation=dark?"lighter":"source-over";
@@ -1093,8 +1097,10 @@ class MapView{
       }
       // stations must read clearly as "stations" from a projector at the back of a room even
       // with zero data — traffic makes them bigger and brighter, it must never be what makes
-      // them visible at all.
-      const r=(4.6+heat*5.0)*(this.opts.role==="tablet"?1.2:1)*focusScale;
+      // them visible at all. Base 4.6 (idle) → up to 12.6 (highest-traffic) before focus
+      // scaling; heat coefficient bumped from 5 → 8 so busier stations pull visibly ahead
+      // of the pack, while the base stays small enough that labels don't collide.
+      const r=(4.6+heat*8.0)*(this.opts.role==="tablet"?1.2:1)*focusScale;
 
       if(this.opts.showAggregate && heat>0.05 && !this.opts.interactive){
         const ph=((this.pulse*0.5)+(n.id*0.137))%1;
@@ -1134,11 +1140,15 @@ class MapView{
           ctx.lineTo(s.x, above?L.ly+L.h+1:L.ly-1);
           ctx.stroke();
         }
-        ctx.globalAlpha=em*(dark?.7:.86);
+        // Slightly stronger background plate so the label sits crisp on top
+        // of arteries + starfield instead of blending into them.
+        ctx.globalAlpha=em*(dark?.82:.92);
         ctx.fillStyle=bg;
         ctx.fillRect(L.x0, L.ly-1, L.tw+6, L.h);
-        ctx.globalAlpha=em*(active||hot?1:.92);
-        ctx.fillStyle=(active||hot)?ink:ink2;
+        // Every station name now uses full ink (was ink-2 for non-focused),
+        // giving the wall a much stronger read from across the room.
+        ctx.globalAlpha=em;
+        ctx.fillStyle=ink;
         ctx.textAlign="left";
         ctx.fillText(L.txt, L.x0+3, L.ly);
         ctx.restore();

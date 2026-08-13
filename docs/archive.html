@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Topography of Us — Archive</title>
+<title>The Mood Topography — Archive</title>
 <link rel="stylesheet" href="assets/style.css">
 <style>
   html,body{overflow:auto}
@@ -109,7 +109,7 @@
       <div class="head-meta" id="headMeta"></div>
     </div>
     <div class="head-actions">
-      <button class="head-btn" id="themeBtn" type="button" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
+      <button class="head-btn" id="themeBtn" type="button" title="Toggle light / dark" aria-label="Toggle theme"></button>
     </div>
   </header>
 
@@ -133,6 +133,7 @@
   <div class="grid" id="grid"></div>
 </div>
 
+<script src="assets/icons.js"></script>
 <script src="assets/remote-config.js"></script>
 <script src="assets/store.js"></script>
 <script src="assets/core.js"></script>
@@ -163,6 +164,7 @@ initQuickNav({current:"archive"});
 // Projection and Settings on any device that's on the same Sync channel.
 // store.js auto-applies Store.theme to :root, and the Store.sub -> render
 // binding below re-paints thumbnails when it flips.
+themeBtn.innerHTML = Icons.theme;
 themeBtn.onclick = () => Store.setTheme(Store.theme === "dark" ? "light" : "dark");
 
 function fmtDate(t){
@@ -201,8 +203,8 @@ function render(){
     card.rel = "noopener";
     card.innerHTML = `
       <div class="card-actions" data-id="${p.id}">
-        <button type="button" class="act" data-act="print" title="Print this constellation" aria-label="Print">⎙</button>
-        <button type="button" class="act danger" data-act="delete" title="Remove from archive" aria-label="Delete">×</button>
+        <button type="button" class="act" data-act="print" title="Print this constellation" aria-label="Print">${Icons.print}</button>
+        <button type="button" class="act danger" data-act="delete" title="Remove from archive" aria-label="Delete">${Icons.trash}</button>
       </div>
       <div class="thumb"><canvas></canvas></div>
       <div class="meta">

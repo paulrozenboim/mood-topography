@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>The Topography of Us — Cast your path</title>
+<title>The Mood Topography — Cast your path</title>
 <link rel="stylesheet" href="assets/style.css">
 <style>
   .kiosk-head{position:relative}
@@ -12,7 +12,7 @@
 </head>
 <body>
 <div id="app">
-  <button class="corner-btn tr" id="themeBtn" title="Toggle theme">Theme</button>
+  <button class="corner-btn tr icon-only" id="themeBtn" type="button" title="Toggle theme" aria-label="Toggle theme"></button>
   <div class="kiosk">
     <div class="kiosk-head">
       <div class="prompt-slot">
@@ -55,11 +55,10 @@
         <div class="keepsake-text">
           <div class="eyebrow">Take it with you</div>
           <p>Scan with your phone to keep this constellation. The link stays live after the night.</p>
-          <a class="keepsake-url" id="mURL" target="_blank" rel="noopener" hidden></a>
         </div>
       </div>
       <div class="print-credits credits" aria-hidden="true">
-        <div class="row"><b>The Topography of Us</b></div>
+        <div class="row"><b>The Mood Topography</b></div>
         <div class="row">Democracy Week · Tel Aviv · 2026</div>
         <div class="row">Cast at Teder · <span id="mPrintDate"></span></div>
         <div class="row">Made by <b>@unapaulogetic_</b></div>
@@ -69,6 +68,7 @@
   </div>
 </div>
 
+<script src="assets/icons.js"></script>
 <script src="assets/remote-config.js"></script>
 <script src="assets/store.js"></script>
 <script src="assets/core.js"></script>
@@ -93,8 +93,9 @@ const toast=document.getElementById("toast");
 // Tablet has no shared nav on purpose — a participant shouldn't be able to reach
 // Settings, Projection, or Home from the kiosk mid-show. Only the theme button
 // stays, top-right, so operators can flip dark/light without touching the router.
-document.getElementById("themeBtn").onclick =
-  ()=>Store.setTheme(Store.theme==="dark"?"light":"dark");
+const themeBtn = document.getElementById("themeBtn");
+themeBtn.innerHTML = Icons.theme;
+themeBtn.onclick = ()=>Store.setTheme(Store.theme==="dark"?"light":"dark");
 document.documentElement.dataset.theme = Store.theme;
 
 let phase="anchor"; // anchor | draw
@@ -204,7 +205,7 @@ const mHead=document.getElementById("mHead"), mSub=document.getElementById("mSub
 const mList=document.getElementById("mList"), mFoot=document.getElementById("mFoot");
 const mMeta=document.getElementById("mMeta");
 const mKeepsake=document.getElementById("mKeepsake");
-const mQR=document.getElementById("mQR"), mURL=document.getElementById("mURL");
+const mQR=document.getElementById("mQR");
 const mPrintDate=document.getElementById("mPrintDate");
 let lastCastIds=null;                              // captured for onbeforeprint
 
@@ -275,13 +276,14 @@ function castNow(ns){
   // when they cast it, not when they later re-opened the link.
   const viewURL = new URL("view.html", location.href).href
     + "#p=" + encodePath(ns) + "&t=" + encodeTime(p.t);
-  mURL.textContent = viewURL;
-  mURL.href = viewURL;
+  // URL text removed from the modal per design — the QR alone is what
+  // participants take away; the full URL lives on archive.html and view.html.
   renderQR(mQR, viewURL, 140);
   mKeepsake.style.display = "flex";
 
   mFoot.innerHTML="";
-  const printBtn=el("button","btn ghost","Print"); printBtn.onclick=()=>window.print();
+  const printBtn=el("button","btn ghost",`${Icons.print}<span>Print</span>`);
+  printBtn.onclick=()=>window.print();
   const doneBtn=el("button","btn","Done");
   doneBtn.onclick=()=>{ veil.classList.remove("on"); reset() };
   mFoot.append(printBtn, doneBtn);
