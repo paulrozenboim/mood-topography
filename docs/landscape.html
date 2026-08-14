@@ -41,6 +41,11 @@
   </div>
   <div class="hud br">
     <div class="slider-row">
+      <label>Height</label>
+      <input type="range" id="heightSlider" min="0" max="200" value="100" step="1">
+      <span class="val" id="heightVal">100%</span>
+    </div>
+    <div class="slider-row">
       <label>Curve</label>
       <input type="range" id="curveSlider" min="0" max="100" value="0" step="1">
       <span class="val" id="curveVal">0%</span>
@@ -74,6 +79,8 @@ const meta = document.getElementById("meta");
 const corners = document.getElementById("corners");
 const curveSlider = document.getElementById("curveSlider");
 const curveVal = document.getElementById("curveVal");
+const heightSlider = document.getElementById("heightSlider");
+const heightVal = document.getElementById("heightVal");
 
 document.documentElement.dataset.theme = Store.theme;
 
@@ -84,6 +91,7 @@ let panX = 0, panY = 0;                 // screen-space translation
 let autoRotate = true;
 let showPaths = true;
 let curvature = 0;                       // 0..1
+let heightScale = 1;                     // 0..2 — user-controlled height multiplier
 let dragMode = null;                     // "rotate" | "pan" | null
 let dragStart = null;
 const FOV = 720;
@@ -92,7 +100,6 @@ let cx = 0, cy = 0;
 const WORLD_BOX = {w:1400, h:820};
 const worldCenter = {x: WORLD_BOX.w/2, y: 0, z: WORLD_BOX.h/2};
 const dMaxWorld = Math.hypot(WORLD_BOX.w/2, WORLD_BOX.h/2);
-const MAX_BULGE = 260;                    // Y offset added at world center when curvature=1
 
 function resize(){
   const dpr = Math.min(devicePixelRatio||1, 2);
@@ -105,18 +112,35 @@ function resize(){
 addEventListener("resize", resize); resize();
 
 // ---- 3D → 2D projection --------------------------------------------------
-// Apply spherical bulge to Y based on horizontal distance from world center,
-// then rotate + perspective-project. curvature=0 leaves the plane flat.
+// The flat plane is optionally wrapped onto a sphere (curvature slider): every
+// point — grid, stations, path samples — is remapped so radial distance from
+// world center rides the surface of a sphere whose subtended half-angle scales
+// with curvature. At 0% flat; at 100% the map wraps close to a full hemisphere,
+// with the horizon rolling down and inward like a mini-planet.
+//   dz sign is inverted so the *bottom* of the tablet map (high n.y) sits
+//   closer to the camera, matching the tablet + projection left/right/top/bottom
+//   convention.
+function sphericalWrap(dx, dz, wy){
+  if(curvature < 0.005) return {x: dx, y: wy, z: dz};
+  const theta_max = curvature * Math.PI * 0.8;   // up to ~144° at slider = 100%
+  const R = dMaxWorld / theta_max;
+  const dPlane = Math.hypot(dx, dz);
+  if(dPlane < 0.001){
+    return {x: 0, y: wy + R * (1 - Math.cos(theta_max)), z: 0};
+  }
+  const theta = dPlane / R;
+  const horizScale = (R * Math.sin(theta)) / dPlane;   // radial compression
+  const lift = R * (Math.cos(theta) - Math.cos(theta_max));
+  // Radial vertex lift: at the pole (dPlane=0) the point rides the top of the
+  // sphere; at dPlane=dMax it sits on the equator with lift=0. wy (station
+  // height) is added on top so vertical columns still stand normal to the flat
+  // reference plane, not the sphere surface — that keeps the tops readable.
+  return {x: dx * horizScale, y: wy + lift, z: dz * horizScale};
+}
 function project(wx, wy, wz){
-  const dx = wx - worldCenter.x;
-  const dz = wz - worldCenter.z;
-  const dPlane = Math.sqrt(dx*dx + dz*dz);
-  const bulge = curvature > 0
-    ? curvature * MAX_BULGE * Math.sqrt(Math.max(0, 1 - (dPlane/dMaxWorld)*(dPlane/dMaxWorld)))
-    : 0;
-  const x = dx;
-  const y = (wy - worldCenter.y) + bulge;
-  const z = dz;
+  const rawDx = wx - worldCenter.x;
+  const rawDz = worldCenter.z - wz;   // flip so tablet-bottom → near camera
+  const {x, y, z} = sphericalWrap(rawDx, rawDz, wy - worldCenter.y);
   const cy_ = Math.cos(yaw),  sy_ = Math.sin(yaw);
   const cp_ = Math.cos(pitch), sp_ = Math.sin(pitch);
   const x1 = x*cy_ - z*sy_;
@@ -136,11 +160,11 @@ function computeMaxTraffic(){
   maxTraffic = Math.max(1, ...A.traffic);
   return A;
 }
-const MAX_HEIGHT = 700;    // world units, height of the tallest station
+const MAX_HEIGHT = 700;    // world units, height of the tallest station at 100%
 function stationHeight(id, traffic){
   const t = (traffic[id]||0) / maxTraffic;
   // pow 0.6 — mid-traffic stations rise more visibly than sqrt(t) gave.
-  return Math.pow(t, 0.6) * MAX_HEIGHT;
+  return Math.pow(t, 0.6) * MAX_HEIGHT * heightScale;
 }
 
 // ---- Theme-reactive palette ---------------------------------------------
@@ -237,7 +261,7 @@ function frame(ts){
   }
 
   // ----- Vertical axis reference at world center -----
-  const axisTop = project(worldCenter.x, MAX_HEIGHT + 60, worldCenter.z);
+  const axisTop = project(worldCenter.x, MAX_HEIGHT * heightScale + 60, worldCenter.z);
   const axisBase = project(worldCenter.x, 0, worldCenter.z);
   if(axisTop && axisBase){
     ctx.strokeStyle = P.axis; ctx.lineWidth = 1;
@@ -252,7 +276,9 @@ function frame(ts){
       const worldPts = p.nodes.map(id => {
         const n = NODES[id];
         const h = stationHeight(id, A.traffic);
-        return {x:n.x, y:h + 12, z:n.y};
+        // Land exactly on top of the station cap — the +offset before was
+        // making paths hover above their anchors.
+        return {x:n.x, y:h, z:n.y};
       });
       const spl = spline3D(worldPts, 16);
       const scr = spl.map(q => project(q.x, q.y, q.z)).filter(Boolean);
@@ -378,13 +404,19 @@ addEventListener("keydown", e => {
   }
 });
 
-// ---- Curvature slider ---------------------------------------------------
+// ---- Sliders -----------------------------------------------------------
 function updateCurve(){
   curvature = (+curveSlider.value)/100;
   curveVal.textContent = curveSlider.value + "%";
 }
 curveSlider.addEventListener("input", updateCurve);
 updateCurve();
+function updateHeight(){
+  heightScale = (+heightSlider.value)/100;
+  heightVal.textContent = heightSlider.value + "%";
+}
+heightSlider.addEventListener("input", updateHeight);
+updateHeight();
 
 // ---- Corner buttons ------------------------------------------------------
 const pathsIconOn  = Icons.eyeOn;
