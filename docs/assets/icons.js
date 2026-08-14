@@ -76,6 +76,24 @@ const Icons = {
       '<path d="M4 4 L 16 16" stroke-width="2"/>' +
     '</svg>',
 
+  // Video-camera silhouette — reads as "cinematic" / first-person flythrough.
+  cinema:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">' +
+      '<rect x="2" y="6" width="11" height="8" rx="1"/>' +
+      '<path d="M13 9 L17.5 6.5 V13.5 L13 11 Z" fill="currentColor" stroke="none"/>' +
+    '</svg>',
+
+  // Repeat with a "1" in the loop — repeat-the-current-track, as in any
+  // music player. Pairs with `repeat` (repeat-all) as a three-state control.
+  repeatOne:
+    '<svg class="icon" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M4 8 A6 6 0 0 1 15 6.5"/>' +
+      '<path d="M16 8 V4 h-4"/>' +
+      '<path d="M16 12 A6 6 0 0 1 5 13.5"/>' +
+      '<path d="M4 12 V16 h4"/>' +
+      '<path d="M9 8.5 L10.5 7.5 V12.5" stroke-width="2"/>' +
+    '</svg>',
+
   // Filled square — reads as "stop" against the play/pause pair.
   stop:
     '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="currentColor">' +

@@ -38,6 +38,7 @@
   .hud .anim-row button svg{width:12px;height:12px;display:block}
   .corner-btns{position:absolute;top:var(--pad);right:var(--pad);display:flex;gap:6px;pointer-events:auto;z-index:6}
   .corner-btns .corner-btn{position:relative;top:auto;right:auto}
+  .corner-btns .corner-btn.on{color:var(--ink);background:rgba(127,127,127,.18);box-shadow:inset 0 0 0 1px var(--ink-3)}
 </style>
 </head>
 <body>
@@ -64,6 +65,11 @@
         <label>Opacity</label>
         <input type="range" id="opacitySlider" min="0" max="200" value="75" step="1">
         <span class="val" id="opacityVal">75%</span>
+      </div>
+      <div class="slider-row">
+        <label>Speed</label>
+        <input type="range" id="speedSlider" min="20" max="200" value="100" step="5">
+        <span class="val" id="speedVal">1.0×</span>
       </div>
       <div class="anim-row" id="animRow"></div>
     </div>
@@ -100,13 +106,22 @@ const sizeSlider = document.getElementById("sizeSlider");
 const sizeVal = document.getElementById("sizeVal");
 const opacitySlider = document.getElementById("opacitySlider");
 const opacityVal = document.getElementById("opacityVal");
+const speedSlider = document.getElementById("speedSlider");
+const speedVal = document.getElementById("speedVal");
 
 document.documentElement.dataset.theme = Store.theme;
 
 // ---- Camera state --------------------------------------------------------
 // Frontal-with-a-tilt: yaw=0 lines up left/right with the tablet/projection;
 // a small negative pitch drops the horizon so height columns stay visible.
-const INIT_YAW = 0, INIT_PITCH = -0.35, INIT_DIST = 875;
+// Straight-on elevation: yaw 0 lines the map up left-to-right exactly as the
+// tablet and projection show it, and pitch 0 puts the eye level with the
+// ground plane — so the floor grid collapses to a single horizon line and the
+// station columns read as a pure height chart.
+const INIT_YAW = 0, INIT_PITCH = 0, INIT_DIST = 820;
+// The horizon sits below centre so the columns have room above it. Expressed
+// as a fraction of viewport height so the framing holds at any window size.
+const INIT_PAN_Y_FRAC = 0.16;
 let yaw = INIT_YAW, pitch = INIT_PITCH;
 let dist = INIT_DIST;
 let panX = 0, panY = 0;                 // screen-space translation
@@ -117,31 +132,51 @@ let sizeContrast = 0.10;                 // 0..1 — cap-radius spread across tr
 let pathOpacity = 0.75;                  // 0..2 — user-controlled path alpha multiplier
 let dragMode = null;                     // "rotate" | "pan" | null
 let dragStart = null;
-// Path animation controller. Time-based so stagger (in ALL) and repeat gaps
-// fall out naturally.
-//   mode: null     — no animation, all paths drawn statically
-//         "single" — draws one specific path, stops on completion
-//         "seq"    — cycles paths one after another (always loops)
-//         "together"— every path draws simultaneously, staggered starts
-//   index:   focus path (for single/seq; ignored by together)
-//   t:       seconds since the current cycle started
-//   playing: false pauses time advancement in place
-//   repeat:  when true, single/together loop; seq always loops regardless
-let anim = { mode:null, index:0, t:0, playing:false, repeat:false };
-const ANIM_DURATION = 3.2;               // seconds to draw one path start-to-end
+// ---- Playback state (an audio player for paths) --------------------------
+//   mode:   null       — stopped; every path drawn statically
+//           "playlist" — plays paths one after another, auto-advancing
+//           "together" — every path draws at once, staggered starts
+//   index:  the "current track" — which path is playing
+//   t:      seconds elapsed inside the current track
+//   playing:false freezes time but keeps the frame visible (pause)
+//   repeat: "off" | "all" (loop the playlist) | "one" (loop current track)
+// Cinema is a separate flag — a CAMERA choice, not a mode — so every
+// transport control behaves identically whether you watch from orbit or fly.
+let anim = { mode:null, index:0, t:0, playing:false, repeat:"off" };
+// Playback rate multiplier. Applied to dt in one place (advanceAnim), so it
+// governs every form of playback — the playlist, ALL, and the cinema flight —
+// without any of them needing to know about it.
+let playSpeed = 1;                       // 0.2 .. 2.0
+const ANIM_DURATION = 3.2;               // seconds to draw one path (orbit)
 const ALL_STAGGER   = 0.35;              // per-path start offset in ALL mode
 const REPEAT_GAP    = 0.9;               // pause between cycles when repeat is on
+// One sample count everywhere, so the render spline and the camera spline
+// agree point-for-point and colours land exactly on stations.
+const PATH_SAMPLES  = 24;                // spline points per station→station leg
 
-// Linear interpolation between two #RRGGBB colors → 'rgb(r,g,b)'. Cheap enough
-// to call per spline segment; drives the gradient stroke below.
-function hexLerp(a, b, t){
-  const pa = a.replace('#',''), pb = b.replace('#','');
-  const ar=parseInt(pa.slice(0,2),16), ag=parseInt(pa.slice(2,4),16), ab=parseInt(pa.slice(4,6),16);
-  const br=parseInt(pb.slice(0,2),16), bg=parseInt(pb.slice(2,4),16), bb=parseInt(pb.slice(4,6),16);
-  const r=Math.round(ar+(br-ar)*t), g=Math.round(ag+(bg-ag)*t), b2=Math.round(ab+(bb-ab)*t);
-  return `rgb(${r},${g},${b2})`;
-}
-const FOV = 720;
+// Cinematic (first-person) fly-through. Slower per-path so the viewer can
+// absorb the terrain instead of being whipped past it.
+let cinema = false;                       // camera choice: true = first-person
+const CINEMA_DURATION   = 15.0;           // seconds to fly one path start-to-end
+const CINEMA_CAM_HEIGHT = 55;             // world units above the path curve
+// Chase distance — how far the lens trails the point it is following. Bigger
+// values pull back and reveal more of the route ahead.
+const CINEMA_DIST       = 190;
+const CINEMA_SMOOTH_TAU = 0.28;           // seconds — heading low-pass constant
+const NEAR_ORBIT        = 1;              // near-plane cull, orbit camera
+// Small on purpose. It was 45 as a blunt guard against the magnification
+// blow-up, but 45 world units is a visible distance — routes and stations were
+// being trimmed well before they left the frame. Now that every segment is
+// genuinely clipped to the plane, the plane itself can sit right at the lens.
+const NEAR_CINEMA       = 6;
+const FOV_ORBIT         = 720;            // normal projection focal factor
+const FOV_CINEMA        = 420;            // shorter focal = wider FOV
+let cinemaCamera = null;                  // {cam:{x,y,z}, yaw, pitch} when active
+let camYaw = null, camPitch = null;       // smoothed heading, null = needs snap
+function resetCinemaSmoothing(){ camYaw = null; camPitch = null; }
+// Per-path duration depends on which camera we're using.
+function currentDuration(){ return cinema ? CINEMA_DURATION : ANIM_DURATION; }
+
 let cx = 0, cy = 0;
 
 const WORLD_BOX = {w:1400, h:820};
@@ -156,32 +191,100 @@ function resize(){
   cx = r.width/2; cy = r.height/2;
 }
 addEventListener("resize", resize); resize();
+// Apply the framing offset now that the canvas has a measured size, so the
+// first painted frame matches what Reset gives you.
+resetCamera();
 
 // ---- 3D → 2D projection --------------------------------------------------
-// dz is negated so the bottom of the tablet map (high n.y) sits *closer* to
-// the camera — matches the left/right/top/bottom convention of the tablet and
-// the projection wall.
-function project(wx, wy, wz){
-  const x = wx - worldCenter.x;
-  const z = worldCenter.z - wz;
-  const y = wy - worldCenter.y;
-  const cy_ = Math.cos(yaw),  sy_ = Math.sin(yaw);
-  const cp_ = Math.cos(pitch), sp_ = Math.sin(pitch);
-  const x1 = x*cy_ - z*sy_;
-  const z1 = x*sy_ + z*cy_;
-  const y2 = y*cp_ - z1*sp_;
-  const z2 = y*sp_ + z1*cp_;
-  const zc = z2 + dist;
-  if(zc <= 1) return null;
-  const s = FOV / zc;
-  return { x: cx + x1*s + panX, y: cy - y2*s + panY, depth: zc, scale: s };
+// Two camera modes share the same math:
+//   ORBIT  — world revolves around worldCenter; user yaw/pitch/dist/pan.
+//   CINEMA — camera *is* a point on a path (cinemaCamera.cam), with a
+//            smoothed heading (cinemaCamera.yaw/.pitch) aimed a little way
+//            further along that same path.
+// dz is negated so the bottom of the tablet map (high n.y) sits closer to the
+// camera — matches the left/right/top/bottom convention of the tablet.
+// Camera parameters are identical for every point in a frame, so they're
+// resolved once per frame instead of per point (this used to run two Math.cos
+// and two Math.sin for every one of several thousand spline points).
+let CAM = null;
+function updateCam(){
+  const c = cinemaCamera;
+  // Heading in cinema is precomputed + smoothed in computeCinemaCamera so it
+  // can't jitter frame to frame.
+  const yawU   = c ? c.yaw   : yaw;
+  const pitchU = c ? c.pitch : pitch;
+  CAM = {
+    ox: c ? c.cam.x : worldCenter.x,
+    oy: c ? c.cam.y : worldCenter.y,
+    oz: c ? c.cam.z : worldCenter.z,
+    cy: Math.cos(yawU),  sy: Math.sin(yawU),
+    cp: Math.cos(pitchU), sp: Math.sin(pitchU),
+    dist: c ? CINEMA_DIST : dist,
+    fov:  c ? FOV_CINEMA  : FOV_ORBIT,
+    near: c ? NEAR_CINEMA : NEAR_ORBIT,
+    pan:  !c
+  };
+}
+// World → camera space. Never fails; `z` is depth in front of the lens, so
+// z <= CAM.near means the point is behind the near plane. Keeping this
+// separate from the perspective divide is what lets segments be *clipped* to
+// the near plane rather than thrown away.
+function toCamera(wx, wy, wz){
+  const C = CAM;
+  const x = wx - C.ox, z = C.oz - wz, y = wy - C.oy;
+  const x1 = x*C.cy - z*C.sy;
+  const z1 = x*C.sy + z*C.cy;
+  return { x: x1, y: y*C.cp - z1*C.sp, z: (y*C.sp + z1*C.cp) + C.dist };
+}
+// Camera space → screen (the perspective divide).
+function camToScreen(c){
+  const C = CAM, s = C.fov / c.z;
+  return {
+    x: cx + c.x*s + (C.pan ? panX : 0),
+    y: cy - c.y*s + (C.pan ? panY : 0),
+    depth: c.z, scale: s
+  };
+}
+// Point on the near plane along the segment inside→outside. Used to trim a
+// segment that straddles the lens so it ends exactly at the plane instead of
+// vanishing (things "disappearing" up close) or being projected from behind
+// the camera (things "glitching out").
+function clipNear(inside, outside){
+  const t = (CAM.near - inside.z) / (outside.z - inside.z);
+  return {
+    x: inside.x + (outside.x - inside.x)*t,
+    y: inside.y + (outside.y - inside.y)*t,
+    z: CAM.near
+  };
+}
+// Clip a camera-space segment to the near plane and project both ends.
+// Returns null only when the segment is entirely behind the lens. Used for
+// grid lines and station columns so they run off the edge of the frame
+// instead of blinking out when the camera gets close.
+function clipSegment(a, b){
+  const near = CAM.near;
+  const aIn = a.z > near, bIn = b.z > near;
+  if(!aIn && !bIn) return null;
+  return {
+    a: camToScreen(aIn ? a : clipNear(b, a)),
+    b: camToScreen(bIn ? b : clipNear(a, b))
+  };
+}
+// Convenience: world-space segment → clipped screen segment.
+function clipWorldSegment(ax, ay, az, bx, by, bz){
+  return clipSegment(toCamera(ax, ay, az), toCamera(bx, by, bz));
 }
 
 // ---- Traffic → height ----------------------------------------------------
 let maxTraffic = 0;
+// analyse() walks every path and is far too heavy to run per frame — it only
+// changes when the data does, so it is cached against Store.version.
+let _analysis = null, _analysisVer = -1;
 function computeMaxTraffic(){
+  if(_analysis && _analysisVer === Store.version) return _analysis;
   const A = analyse(Store.paths);
   maxTraffic = Math.max(1, ...A.traffic);
+  _analysis = A; _analysisVer = Store.version;
   return A;
 }
 const MAX_HEIGHT = 700;    // world units, height of the tallest station at 100%
@@ -232,40 +335,89 @@ function dashedLine(p0, p1, dash=6, gap=6, alpha=1){
   ctx.restore();
 }
 
-// Stroke a polyline where color drifts from one node's mood color to the next.
-// scr is the screen-projected spline; colors is one color per original path
-// node (length = p.nodes.length). Each spline segment picks its color by
-// interpolating between the two node colors it sits between along the path.
-function drawGradientStroke(scr, colors, cutoff, alpha, lineWidth, comp){
-  const end = Math.min(cutoff, scr.length);
+// Stroke a polyline whose colour drifts from one station's mood colour to the
+// next. `cam` holds CAMERA-SPACE points (see toCamera) so each segment can be
+// clipped against the near plane here: a segment with one endpoint behind the
+// lens is trimmed to the plane rather than dropped, which is what stops close
+// geometry from popping out of existence or shearing across the frame.
+//   n === (rgb.length - 1) * samples + 1
+// so point i sits at node-space position i/samples. Segment i→i+1 takes the
+// colour at its midpoint, (i + 0.5)/samples. At i = k*samples that lands
+// exactly on station k's colour, which is what makes stations read as anchors.
+// `buf` is a flat camera-space Float32Array of xyz triples (see transformPath)
+// and `n` its point count. Colours come as [r,g,b] triples, one per station.
+// Segments are emitted in short runs sharing one colour — a stroke per segment
+// meant ~15 000 canvas calls and ~15 000 hex-string parses per frame, which is
+// what made this slow; runs of COLOR_RUN cut both by that factor with no
+// visible banding.
+const COLOR_RUN = 4;
+function drawGradientStroke(buf, n, rgb, samples, cutoff, alpha, lineWidth, comp){
+  const end = Math.min(cutoff, n);
   if(end < 2 || alpha <= 0) return;
-  const total = scr.length - 1;
-  const N = colors.length;
+  const C = CAM, near = C.near, N = rgb.length;
+  const ox = C.pan ? panX : 0, oy = C.pan ? panY : 0;
   ctx.save();
   ctx.globalCompositeOperation = comp;
   ctx.lineWidth = lineWidth;
   ctx.lineCap = "round";
+  ctx.lineJoin = "round";
   ctx.globalAlpha = alpha;
+  let run = 0, open = false;
   for(let i=0; i<end-1; i++){
-    const tPath = (i + 0.5) / total * (N - 1);
-    const seg = Math.min(N - 2, Math.max(0, Math.floor(tPath)));
-    ctx.strokeStyle = hexLerp(colors[seg], colors[seg+1], tPath - seg);
-    ctx.beginPath();
-    ctx.moveTo(scr[i].x, scr[i].y);
-    ctx.lineTo(scr[i+1].x, scr[i+1].y);
-    ctx.stroke();
+    let ax = buf[i*3], ay = buf[i*3+1], az = buf[i*3+2];
+    let bx = buf[i*3+3], by = buf[i*3+4], bz = buf[i*3+5];
+    const aIn = az > near, bIn = bz > near;
+    if(!aIn && !bIn){                       // wholly behind the lens
+      if(open){ ctx.stroke(); open = false; run = 0; }
+      continue;
+    }
+    let clipped = false;
+    if(!aIn){                               // trim trailing end to the plane
+      const t = (near - bz) / (az - bz);
+      ax = bx + (ax-bx)*t; ay = by + (ay-by)*t; az = near; clipped = true;
+    } else if(!bIn){                        // trim leading end to the plane
+      const t = (near - az) / (bz - az);
+      bx = ax + (bx-ax)*t; by = ay + (by-ay)*t; bz = near; clipped = true;
+    }
+    const sa = C.fov/az, sb = C.fov/bz;
+    const axs = cx + ax*sa + ox, ays = cy - ay*sa + oy;
+    const bxs = cx + bx*sb + ox, bys = cy - by*sb + oy;
+    // Start a new run when the colour step changes or the line was broken.
+    if(!open || run >= COLOR_RUN){
+      if(open) ctx.stroke();
+      const tPath = (i + 0.5) / samples;
+      const seg = Math.min(N - 2, Math.max(0, Math.floor(tPath)));
+      const f = tPath - seg, c0 = rgb[seg], c1 = rgb[seg+1];
+      ctx.strokeStyle = "rgb(" +
+        ((c0[0] + (c1[0]-c0[0])*f)|0) + "," +
+        ((c0[1] + (c1[1]-c0[1])*f)|0) + "," +
+        ((c0[2] + (c1[2]-c0[2])*f)|0) + ")";
+      ctx.beginPath();
+      ctx.moveTo(axs, ays);
+      open = true; run = 0;
+    }
+    ctx.lineTo(bxs, bys);
+    run++;
+    // A clipped segment ends at the frame edge — don't chain the next one to it.
+    if(clipped){ ctx.stroke(); open = false; run = 0; }
   }
+  if(open) ctx.stroke();
   ctx.restore();
 }
 
-function spline3D(pts, samples=18){
+// Catmull-rom through every point, with the ends duplicated so the curve
+// actually reaches the first and last station. Returns exactly
+// (pts.length - 1) * samples + 1 points — the integer loop matters: the old
+// `for(t=0; t<1; t+=1/samples)` accumulated float error and emitted one point
+// too few on some legs, which slid the colour mapping off the stations.
+function spline3D(pts, samples=PATH_SAMPLES){
   if(pts.length < 2) return pts.slice();
   const P = [pts[0], ...pts, pts[pts.length-1]];
   const out = [];
   for(let i=1; i<P.length-2; i++){
     const p0=P[i-1], p1=P[i], p2=P[i+1], p3=P[i+2];
-    for(let t=0; t<1; t+=1/samples){
-      const t2=t*t, t3=t2*t;
+    for(let s=0; s<samples; s++){
+      const t = s/samples, t2=t*t, t3=t2*t;
       const x=.5*((2*p1.x)+(-p0.x+p2.x)*t+(2*p0.x-5*p1.x+4*p2.x-p3.x)*t2+(-p0.x+3*p1.x-3*p2.x+p3.x)*t3);
       const y=.5*((2*p1.y)+(-p0.y+p2.y)*t+(2*p0.y-5*p1.y+4*p2.y-p3.y)*t2+(-p0.y+3*p1.y-3*p2.y+p3.y)*t3);
       const z=.5*((2*p1.z)+(-p0.z+p2.z)*t+(2*p0.z-5*p1.z+4*p2.z-p3.z)*t2+(-p0.z+3*p1.z-3*p2.z+p3.z)*t3);
@@ -276,6 +428,65 @@ function spline3D(pts, samples=18){
   return out;
 }
 
+// ---- Path geometry cache -------------------------------------------------
+// Splines are pure functions of the data + the height slider + the theme, so
+// they are built once and reused across frames. Rebuilding them every frame
+// (allocating tens of thousands of point objects a second) was the main source
+// of stutter. Stored flat so the per-frame transform touches no objects at all.
+function hexToRgb(h){
+  const p = h.replace('#','');
+  return [parseInt(p.slice(0,2),16), parseInt(p.slice(2,4),16), parseInt(p.slice(4,6),16)];
+}
+let _geom = { key:null, items:null };
+function pathGeometry(A){
+  const key = Store.version + "|" + heightScale + "|" + maxTraffic + "|" + Store.theme;
+  if(_geom.key === key) return _geom.items;
+  const items = [];
+  let idx = 0;
+  for(const p of Store.paths){
+    if(p.nodes.length < 2) continue;
+    const worldPts = p.nodes.map(id => {
+      const nd = NODES[id];
+      // Land exactly on top of the station cap.
+      return {x:nd.x, y:stationHeight(id, A.traffic), z:nd.y};
+    });
+    const spl = spline3D(worldPts, PATH_SAMPLES);
+    const n = spl.length;
+    const xyz = new Float32Array(n*3);
+    let sx=0, sy=0, sz=0;
+    for(let i=0;i<n;i++){
+      const q = spl[i];
+      xyz[i*3] = q.x; xyz[i*3+1] = q.y; xyz[i*3+2] = q.z;
+      sx += q.x; sy += q.y; sz += q.z;
+    }
+    items.push({
+      p, xyz, n, idx,
+      cx: sx/n, cy: sy/n, cz: sz/n,                       // centroid, for depth sort
+      rgb: p.nodes.map(id => hexToRgb(catColor(NODES[id].c, Store.theme)))
+    });
+    idx++;
+  }
+  _geom = { key, items };
+  return items;
+}
+// Reused across every path in a frame — transforming into a shared buffer
+// keeps per-frame allocation at zero.
+let _scratch = new Float32Array(0);
+function transformPath(xyz, n){
+  if(_scratch.length < n*3) _scratch = new Float32Array(n*3);
+  const buf = _scratch, C = CAM;
+  for(let i=0;i<n;i++){
+    const j = i*3;
+    const x = xyz[j] - C.ox, z = C.oz - xyz[j+2], y = xyz[j+1] - C.oy;
+    const x1 = x*C.cy - z*C.sy;
+    const z1 = x*C.sy + z*C.cy;
+    buf[j]   = x1;
+    buf[j+1] = y*C.cp - z1*C.sp;
+    buf[j+2] = (y*C.sp + z1*C.cp) + C.dist;
+  }
+  return buf;
+}
+
 // ---- Frame -------------------------------------------------------------
 let lastTs = performance.now();
 function frame(ts){
@@ -283,7 +494,14 @@ function frame(ts){
   lastTs = ts;
   if(autoRotate && !dragMode) yaw += dt * 0.14;
   advanceAnim(dt);
+  // Traffic first — the cinema spline needs station heights, which depend on it.
   const A = computeMaxTraffic();
+  // Refreshed every frame, even paused, so a paused frame stays correctly
+  // framed. Null whenever the first-person camera is off.
+  cinemaCamera = cinema ? computeCinemaCamera(dt, A) : null;
+  // Resolve the camera once, now that cinemaCamera is settled. Everything that
+  // projects this frame reads from CAM, so it must be built before the grid.
+  updateCam();
   const P = palette();
 
   const r = cv.getBoundingClientRect();
@@ -294,91 +512,96 @@ function frame(ts){
   ctx.fillStyle = grad; ctx.fillRect(0,0,r.width,r.height);
 
   // ----- Grid on the X-Z plane (Y=0) -----
+  // Clipped, not culled: a grid line running under the camera should sweep off
+  // the edge of the frame rather than vanish the moment one end passes behind.
   ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
   const STEP = 100, minor = 3;
   for(let i=-4; i<=WORLD_BOX.w/STEP + 4; i++){
     const x = i*STEP;
-    const a = project(x, 0, -400);
-    const b = project(x, 0, WORLD_BOX.h + 400);
-    if(!a || !b) continue;
-    dashedLine(a, b, 3, minor, 0.35);
+    const s = clipWorldSegment(x, 0, -400, x, 0, WORLD_BOX.h + 400);
+    if(s) dashedLine(s.a, s.b, 3, minor, 0.35);
   }
   for(let j=-4; j<=WORLD_BOX.h/STEP + 4; j++){
     const z = j*STEP;
-    const a = project(-400, 0, z);
-    const b = project(WORLD_BOX.w + 400, 0, z);
-    if(!a || !b) continue;
-    dashedLine(a, b, 3, minor, 0.35);
+    const s = clipWorldSegment(-400, 0, z, WORLD_BOX.w + 400, 0, z);
+    if(s) dashedLine(s.a, s.b, 3, minor, 0.35);
   }
 
   // ----- Vertical axis reference at world center -----
-  const axisTop = project(worldCenter.x, MAX_HEIGHT * heightScale + 60, worldCenter.z);
-  const axisBase = project(worldCenter.x, 0, worldCenter.z);
-  if(axisTop && axisBase){
+  const axis = clipWorldSegment(worldCenter.x, 0, worldCenter.z,
+                                worldCenter.x, MAX_HEIGHT * heightScale + 60, worldCenter.z);
+  if(axis){
     ctx.strokeStyle = P.axis; ctx.lineWidth = 1;
-    dashedLine(axisBase, axisTop, 4, 6, 1);
+    dashedLine(axis.a, axis.b, 4, 6, 1);
   }
 
   // ----- Aggregate paths as 3D curves (skipped when hidden) -----
   if(showPaths){
-    const pathsRender = [];
-    let playableIdx = 0;
-    for(const p of Store.paths){
-      if(p.nodes.length < 2) continue;
-      const worldPts = p.nodes.map(id => {
-        const n = NODES[id];
-        const h = stationHeight(id, A.traffic);
-        // Land exactly on top of the station cap — the +offset before was
-        // making paths hover above their anchors.
-        return {x:n.x, y:h, z:n.y};
-      });
-      const spl = spline3D(worldPts, 16);
-      const scr = spl.map(q => project(q.x, q.y, q.z)).filter(Boolean);
-      if(scr.length < 2){ playableIdx++; continue; }
-      const avgDepth = scr.reduce((a,b)=>a+b.depth,0) / scr.length;
-      // idx is the position among *playable* paths — matches what
-      // pathProgress() and playablePathCount() count.
-      pathsRender.push({p, scr, avgDepth, idx:playableIdx});
-      playableIdx++;
-    }
-    pathsRender.sort((a,b)=> b.avgDepth - a.avgDepth);
+    // Depth-sort on the centroid only — one transform per path instead of one
+    // per spline point, and plenty accurate for ordering these ribbons.
+    const items = pathGeometry(A);
+    const order = items.map(g => {
+      const c = toCamera(g.cx, g.cy, g.cz);
+      return { g, depth: c.z };
+    }).sort((a,b)=> b.depth - a.depth);
+
+    // Playback drives what gets drawn; cinema only changes the camera.
     const animating = anim.mode !== null;
-    const together = anim.mode === "together";
-    const playCount = pathsRender.length;
-    for(const {p, scr, idx} of pathsRender){
-      // Per-node colors so the stroke can drift from mood to mood along the
-      // path — same "gradient path" effect as the flat map view.
-      const colors = p.nodes.map(id => catColor(NODES[id].c, Store.theme));
+    const together  = anim.mode === "together";
+    const playCount = items.length;
+    for(const { g } of order){
+      const { p, xyz, n, idx, rgb } = g;
       const baseAlpha = p.seeded ? P.pathSeed : P.pathReal;
+      // Together: every path is a "focus". Playlist: only the current track
+      // draws; other paths dim so the animation reads clearly.
+      const isFocus = animating && (together || idx === anim.index);
       let alpha, cutoff, lineWidth;
       if(animating){
         const prog = pathProgress(idx, playCount);
-        // Together: every path is a "focus". Single/seq: only the focused index
-        // draws; other paths dim so the animation reads clearly.
-        const isFocus = together || idx === anim.index;
         alpha = isFocus ? 1 : baseAlpha * 0.18;
         lineWidth = isFocus ? 2.6 : 1.6;
-        cutoff = isFocus ? Math.max(2, Math.floor(scr.length * prog)) : scr.length;
+        // n is fixed, so this cutoff advances smoothly instead of jumping as
+        // points cross the near plane.
+        cutoff = isFocus ? Math.max(2, Math.round(n * prog)) : n;
         // In together mode a path not yet started (prog=0) should render nothing.
         if(together && prog <= 0) continue;
       } else {
         alpha = baseAlpha;
         lineWidth = 1.6;
-        cutoff = scr.length;
+        cutoff = n;
       }
+      const cam = transformPath(xyz, n);
       alpha = Math.max(0, Math.min(1, alpha * pathOpacity));
-      drawGradientStroke(scr, colors, cutoff, alpha, lineWidth, P.pathComp);
-      // Bright head at the drawing tip — reads as "ink still flowing".
-      const drawing = animating && cutoff < scr.length && cutoff >= 2;
-      if(drawing){
-        const head = scr[cutoff-1];
-        const t = ((cutoff - 1) / Math.max(1, scr.length - 1)) * (colors.length - 1);
-        const seg = Math.min(colors.length - 2, Math.floor(t));
+      if(cinema && isFocus){
+        // We are flying ALONG this path, so everything up to `cutoff` is
+        // already behind the lens and gets culled — a progressive cutoff left
+        // just the sliver straddling the near plane, which is why the route
+        // showed up as one lone straight streak. Lay the whole route down
+        // faintly so the road ahead is visible, then overdraw the part already
+        // flown at full strength.
+        drawGradientStroke(cam, n, rgb, PATH_SAMPLES, n,      alpha*0.4, lineWidth, P.pathComp);
+        drawGradientStroke(cam, n, rgb, PATH_SAMPLES, cutoff, alpha,     lineWidth, P.pathComp);
+      } else {
+        drawGradientStroke(cam, n, rgb, PATH_SAMPLES, cutoff, alpha, lineWidth, P.pathComp);
+      }
+      // Bright head at the drawing tip — reads as "ink still flowing". Skip
+      // in cinema: the camera sits right at that tip, so the dot would blot
+      // out the frame.
+      const hz = cam[(cutoff-1)*3+2];
+      if(animating && !cinema && cutoff < n && cutoff >= 2 && hz > CAM.near){
+        const s = CAM.fov / hz;
+        const hx = cx + cam[(cutoff-1)*3]*s     + (CAM.pan ? panX : 0);
+        const hy = cy - cam[(cutoff-1)*3+1]*s   + (CAM.pan ? panY : 0);
+        const t = (cutoff - 1) / PATH_SAMPLES;
+        const seg = Math.min(rgb.length - 2, Math.max(0, Math.floor(t)));
+        const f = t - seg, c0 = rgb[seg], c1 = rgb[seg+1];
         ctx.save();
         ctx.globalAlpha = alpha;
-        ctx.fillStyle = hexLerp(colors[seg], colors[seg+1], t - seg);
+        ctx.fillStyle = "rgb(" + ((c0[0]+(c1[0]-c0[0])*f)|0) + "," +
+                                 ((c0[1]+(c1[1]-c0[1])*f)|0) + "," +
+                                 ((c0[2]+(c1[2]-c0[2])*f)|0) + ")";
         ctx.beginPath();
-        ctx.arc(head.x, head.y, 4.5, 0, 7);
+        ctx.arc(hx, hy, 4.5, 0, 7);
         ctx.fill();
         ctx.restore();
       }
@@ -386,12 +609,22 @@ function frame(ts){
   }
 
   // ----- Station columns + caps -----
+  // The cap, the floor ring and the column are judged separately. Requiring
+  // BOTH ends to be in front used to delete a whole station — cap, column and
+  // label — the moment its base slipped behind the near plane, which is why
+  // nearby stations blinked out entirely as the camera passed them.
   const stationRender = NODES.map(n => {
     const h = stationHeight(n.id, A.traffic);
-    const base = project(n.x, 0, n.y);
-    const top  = project(n.x, h, n.y);
-    if(!base || !top) return null;
-    return {n, h, base, top, depth:top.depth, traffic:A.traffic[n.id]||0};
+    const camBase = toCamera(n.x, 0, n.y);
+    const camTop  = toCamera(n.x, h, n.y);
+    if(camBase.z <= CAM.near && camTop.z <= CAM.near) return null;  // wholly behind
+    return {
+      n, h, camBase, camTop,
+      base: camBase.z > CAM.near ? camToScreen(camBase) : null,
+      top:  camTop.z  > CAM.near ? camToScreen(camTop)  : null,
+      depth: camTop.z,
+      traffic: A.traffic[n.id]||0
+    };
   }).filter(Boolean).sort((a,b)=> b.depth - a.depth);
 
   // Cap radius: linear ramp from tNorm (traffic/peak). sizeContrast controls
@@ -402,21 +635,29 @@ function frame(ts){
     const col = catColor(st.n.c, Store.theme);
     const tNorm = st.traffic / maxTraffic;
     const capR = 2 + tNorm * capMaxPx;
-    ctx.strokeStyle = col; ctx.lineWidth = 1.2;
-    dashedLine(st.base, st.top, 5, 4, 0.75);
-    ctx.save();
-    ctx.globalAlpha = 0.55;
-    ctx.strokeStyle = col; ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(st.base.x, st.base.y, Math.max(2, capR * 0.55 * st.base.scale), 0, 7);
-    ctx.stroke();
-    ctx.restore();
-    ctx.save();
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.arc(st.top.x, st.top.y, capR, 0, 7);
-    ctx.fill();
-    ctx.restore();
+    // Column: clipped, so it stays drawn while either end is visible.
+    const col3 = clipSegment(st.camBase, st.camTop);
+    if(col3){
+      ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+      dashedLine(col3.a, col3.b, 5, 4, 0.75);
+    }
+    if(st.base){
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = col; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(st.base.x, st.base.y, Math.max(2, capR * 0.55 * st.base.scale), 0, 7);
+      ctx.stroke();
+      ctx.restore();
+    }
+    if(st.top){
+      ctx.save();
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(st.top.x, st.top.y, capR, 0, 7);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   // ----- Station labels -----
@@ -452,6 +693,10 @@ requestAnimationFrame(frame);
 
 // ---- Input --------------------------------------------------------------
 cv.addEventListener("pointerdown", e => {
+  // Any drag while flying first-person = user wants the orbit camera back.
+  // Exit cinema only; the underlying single/seq playback keeps running so
+  // the orbit view shows it continuing to draw.
+  if(cinema){ cinema = false; syncAnimButtons(); }
   // Middle button (button===1) pans. Anything else rotates.
   dragMode = e.button === 1 ? "pan" : "rotate";
   autoRotate = false;
@@ -483,7 +728,9 @@ cv.addEventListener("wheel", e => {
 }, {passive:false});
 
 function resetCamera(){
-  yaw = INIT_YAW; pitch = INIT_PITCH; dist = INIT_DIST; panX = 0; panY = 0;
+  yaw = INIT_YAW; pitch = INIT_PITCH; dist = INIT_DIST; panX = 0;
+  // Height-relative so Reset frames the same way whatever the window size.
+  panY = cv.getBoundingClientRect().height * INIT_PAN_Y_FRAC;
 }
 
 addEventListener("keydown", e => {
@@ -503,79 +750,168 @@ function playablePathCount(){
   return Store.paths.filter(p => p.nodes.length >= 2).length;
 }
 // How long a full ALL cycle lasts: last path's start + its draw + repeat gap.
+// Together mode isn't used with cinema, so it always uses the orbit duration.
 function togetherCycle(count){
   return ANIM_DURATION + Math.max(0, count-1) * ALL_STAGGER + REPEAT_GAP;
+}
+// Point along a flat xyz spline at normalised position 0..1. The camera rides
+// the very same cached geometry the paths are drawn from, so it can never
+// drift off the line it is following.
+function splerpFlat(xyz, n, tGlobal){
+  const total = n - 1;
+  const pos = Math.max(0, Math.min(total, tGlobal * total));
+  const i = Math.floor(pos), next = Math.min(total, i + 1), f = pos - i;
+  return {
+    x: xyz[i*3]   + (xyz[next*3]   - xyz[i*3])   * f,
+    y: xyz[i*3+1] + (xyz[next*3+1] - xyz[i*3+1]) * f,
+    z: xyz[i*3+2] + (xyz[next*3+2] - xyz[i*3+2]) * f
+  };
+}
+// Cinema camera derived from the current track + anim.t. Heading is low-passed
+// so the view glides through corners instead of snapping at every station.
+function computeCinemaCamera(dt, A){
+  if(!cinema || anim.mode !== "playlist") return null;
+  const g = pathGeometry(A)[anim.index];
+  if(!g || g.n < 2) return null;
+  const t = Math.min(1, anim.t / currentDuration());
+  // Look a fixed number of spline points ahead rather than a fixed fraction of
+  // the path, so short and long paths bank at the same rate.
+  const look = Math.min(1, t + (PATH_SAMPLES * 0.8) / (g.n - 1));
+  const camPos = splerpFlat(g.xyz, g.n, t);
+  const target = splerpFlat(g.xyz, g.n, look);
+  const dx = target.x - camPos.x;
+  const dz = camPos.z - target.z;
+  const dy = target.y - camPos.y;
+  const flat = Math.hypot(dx, dz);
+  const wantYaw   = (flat < 1e-4 && Math.abs(dy) < 1e-4) ? (camYaw ?? 0) : Math.atan2(dx, dz);
+  const wantPitch = Math.atan2(dy, Math.max(1e-4, flat));
+  if(camYaw === null){
+    camYaw = wantYaw; camPitch = wantPitch;
+  } else {
+    // Framerate-independent, and scaled by playSpeed so the camera stays
+    // equally responsive at every speed — otherwise a fast fly-through would
+    // out-run its own smoothing and cut every corner.
+    const k = 1 - Math.exp(-(dt * playSpeed) / CINEMA_SMOOTH_TAU);
+    let d = wantYaw - camYaw;                          // take the short way round
+    while(d >  Math.PI) d -= 2*Math.PI;
+    while(d < -Math.PI) d += 2*Math.PI;
+    camYaw   += d * k;
+    camPitch += (wantPitch - camPitch) * k;
+  }
+  // Camera rides above the path so we look down into the terrain rather than
+  // skimming through station caps.
+  camPos.y += CINEMA_CAM_HEIGHT;
+  return { cam:camPos, yaw:camYaw, pitch:camPitch };
+}
+
+// True when the current track (or ALL cycle) has run to its end.
+function animAtEnd(){
+  if(anim.mode === "together") return anim.t >= togetherCycle(playablePathCount());
+  return anim.t >= currentDuration();
 }
 function advanceAnim(dt){
   if(!anim.mode || !anim.playing) return;
   const count = playablePathCount();
   if(!count){ animStop(); return; }
-  anim.t += dt;
-  if(anim.mode === "seq"){
-    // Default: after each path completes, advance to the next (one-after-another).
-    // With Repeat on: loop the SAME current path over and over instead.
-    if(anim.t >= ANIM_DURATION){
-      if(!anim.repeat) anim.index = (anim.index + 1) % count;
-      anim.t = 0;
-    }
-  } else if(anim.mode === "single"){
-    if(anim.t >= ANIM_DURATION){
-      if(anim.repeat){ anim.t = 0; }
-      else { anim.t = ANIM_DURATION; anim.playing = false; syncAnimButtons(); }
+  if(anim.index >= count) anim.index = 0;
+  anim.t += dt * playSpeed;
+
+  if(anim.mode === "playlist"){
+    const D = currentDuration();
+    if(anim.t < D) return;
+    if(anim.repeat === "one"){ anim.t = 0; return; }   // loop this track
+    const next = anim.index + 1;
+    if(next < count){                                   // next track
+      anim.index = next; anim.t = 0; resetCinemaSmoothing();
+    } else if(anim.repeat === "all"){                   // wrap the playlist
+      anim.index = 0; anim.t = 0; resetCinemaSmoothing();
+    } else {                                            // end of playlist
+      anim.t = D; anim.playing = false; syncAnimButtons();
     }
   } else if(anim.mode === "together"){
     const cycle = togetherCycle(count);
-    if(anim.t >= cycle){
-      if(anim.repeat){ anim.t = 0; }
-      else { anim.t = cycle; anim.playing = false; syncAnimButtons(); }
-    }
+    if(anim.t < cycle) return;
+    if(anim.repeat !== "off"){ anim.t = 0; }
+    else { anim.t = cycle; anim.playing = false; syncAnimButtons(); }
   }
 }
-function animStart(mode, indexDelta){
+
+// ▶ / ⏸ — starts the playlist if stopped, otherwise pauses/resumes in place.
+function animTogglePlay(){
   const count = playablePathCount();
   if(!count) return;
-  if(!anim.mode){ anim.index = 0; }
-  else if(indexDelta){ anim.index = (anim.index + indexDelta + count) % count; }
-  anim.mode = mode;
+  if(!anim.mode){
+    anim.mode = "playlist"; anim.index = 0; anim.t = 0; anim.playing = true;
+    resetCinemaSmoothing(); syncAnimButtons(); return;
+  }
+  anim.playing = !anim.playing;
+  if(anim.playing && animAtEnd()) anim.t = 0;   // replay if parked at the end
+  syncAnimButtons();
+}
+// ⏮ / ⏭ — skip tracks. Always lands in playlist mode and starts playing.
+function animSkip(delta){
+  const count = playablePathCount();
+  if(!count) return;
+  anim.index = ((anim.mode ? anim.index : 0) + delta + count) % count;
+  anim.mode = "playlist";
+  anim.t = 0;
+  anim.playing = true;
+  resetCinemaSmoothing();
+  syncAnimButtons();
+}
+// ⏹ — full stop: static view, cinema off.
+function animStop(){
+  anim.mode = null;
+  anim.t = 0;
+  anim.playing = false;
+  cinema = false;
+  resetCinemaSmoothing();
+  syncAnimButtons();
+}
+// 🔁 — off → repeat all → repeat one → off, as in any music player.
+function animCycleRepeat(){
+  anim.repeat = anim.repeat === "off" ? "all"
+              : anim.repeat === "all" ? "one"
+              : "off";
+  syncAnimButtons();
+}
+// ALL — every path at once. Not a playlist concept, so it's its own toggle,
+// and it can't coexist with the first-person camera.
+function animToggleAll(){
+  if(anim.mode === "together"){ animStop(); return; }
+  const count = playablePathCount();
+  if(!count) return;
+  cinema = false;
+  anim.mode = "together";
   anim.t = 0;
   anim.playing = true;
   syncAnimButtons();
 }
-function animTogglePlay(){
-  if(!anim.mode){ animStart("single", 0); return; }
-  anim.playing = !anim.playing;
-  // If restarting a finished single/together, replay from the top.
-  if(anim.playing){
-    if(anim.mode === "single"    && anim.t >= ANIM_DURATION) anim.t = 0;
-    if(anim.mode === "together"){
-      const c = playablePathCount();
-      if(anim.t >= togetherCycle(c)) anim.t = 0;
-    }
+// 🎥 — camera choice only. Playback keeps whatever it was doing; if nothing
+// was playing we start the playlist so there's something to fly along.
+function animToggleCinema(){
+  if(cinema){ cinema = false; resetCinemaSmoothing(); syncAnimButtons(); return; }
+  const count = playablePathCount();
+  if(!count) return;
+  cinema = true;
+  autoRotate = false;
+  resetCinemaSmoothing();
+  if(!anim.mode || anim.mode === "together"){
+    anim.mode = "playlist"; anim.t = 0; anim.playing = true;
+  } else if(animAtEnd()){
+    anim.t = 0; anim.playing = true;      // parked at the end — restart the fly
   }
   syncAnimButtons();
 }
-function animStop(){
-  // Wipes the whole animation state; paths render statically again.
-  anim.mode = null;
-  anim.t = 0;
-  anim.playing = false;
-  syncAnimButtons();
-}
-function animToggleRepeat(){
-  anim.repeat = !anim.repeat;
-  syncAnimButtons();
-}
-// Per-path progress for the current frame. Only ever called when
-// anim.mode is truthy; returns 0..1 for the given path index/position.
+// Per-path progress for the current frame, 0..1.
 function pathProgress(idxInPlayable, count){
   if(anim.mode === "together"){
     const localT = anim.t - idxInPlayable * ALL_STAGGER;
     if(localT <= 0) return 0;
     return Math.min(1, localT / ANIM_DURATION);
   }
-  // single & seq: only the focus path animates
-  if(idxInPlayable !== anim.index) return 0;
-  return Math.min(1, anim.t / ANIM_DURATION);
+  if(idxInPlayable !== anim.index) return 0;    // only the current track draws
+  return Math.min(1, anim.t / currentDuration());
 }
 
 // ---- Sliders -----------------------------------------------------------
@@ -597,6 +933,12 @@ function updateOpacity(){
 }
 opacitySlider.addEventListener("input", updateOpacity);
 updateOpacity();
+function updateSpeed(){
+  playSpeed = (+speedSlider.value)/100;
+  speedVal.textContent = playSpeed.toFixed(1) + "×";
+}
+speedSlider.addEventListener("input", updateSpeed);
+updateSpeed();
 
 // ---- Animation buttons ---------------------------------------------------
 const animRow = document.getElementById("animRow");
@@ -604,49 +946,64 @@ animRow.innerHTML =
   `<button id="animPrev"   title="Previous path" aria-label="Previous path">${Icons.prev}</button>` +
   `<button id="animPlay"   title="Play"          aria-label="Play">${Icons.play}</button>` +
   `<button id="animNext"   title="Next path"     aria-label="Next path">${Icons.next}</button>` +
-  `<button id="animStop"   title="Stop"          aria-label="Stop and return to static view">${Icons.stop}</button>` +
-  `<button id="animAll"    title="All at once (staggered)"  aria-label="Animate all together">ALL</button>` +
-  `<button id="animSeq"    title="One by one"    aria-label="Cycle paths one by one">ONE</button>` +
-  `<button id="animRepeat" title="Repeat"        aria-label="Repeat animation">${Icons.repeat}</button>`;
+  `<button id="animStop"   title="Stop"          aria-label="Stop">${Icons.stop}</button>` +
+  `<button id="animRepeat" title="Repeat: off"   aria-label="Repeat: off">${Icons.repeat}</button>` +
+  `<button id="animAll"    title="All paths at once" aria-label="All paths at once">ALL</button>`;
 const animPlayBtn   = document.getElementById("animPlay");
 const animStopBtn   = document.getElementById("animStop");
 const animAllBtn    = document.getElementById("animAll");
-const animSeqBtn    = document.getElementById("animSeq");
 const animRepeatBtn = document.getElementById("animRepeat");
-document.getElementById("animPrev").onclick = () => animStart("single", -1);
-document.getElementById("animNext").onclick = () => animStart("single", +1);
+document.getElementById("animPrev").onclick = () => animSkip(-1);
+document.getElementById("animNext").onclick = () => animSkip(+1);
 animPlayBtn.onclick   = animTogglePlay;
 animStopBtn.onclick   = animStop;
-animAllBtn.onclick    = () => animStart("together", 0);
-animSeqBtn.onclick    = () => animStart("seq", 0);
-animRepeatBtn.onclick = animToggleRepeat;
+animRepeatBtn.onclick = animCycleRepeat;
+animAllBtn.onclick    = animToggleAll;
+// Initial sync happens at the very bottom, AFTER the corner buttons block
+// declares cinemaBtn — otherwise ?. still trips the TDZ on that const.
 function syncAnimButtons(){
+  // Called during setup before every element exists, and from frame() at any
+  // moment, so guard every DOM touch — one throw here previously took down
+  // corner-button + nav setup entirely.
   const isPlaying = anim.mode && anim.playing;
-  animPlayBtn.innerHTML = isPlaying ? Icons.pause : Icons.play;
-  const label = isPlaying ? "Pause" : "Play";
-  animPlayBtn.title = label; animPlayBtn.setAttribute("aria-label", label);
-  animAllBtn   .classList.toggle("on", anim.mode === "together");
-  animSeqBtn   .classList.toggle("on", anim.mode === "seq");
-  animRepeatBtn.classList.toggle("on", anim.repeat);
+  if(animPlayBtn){
+    animPlayBtn.innerHTML = isPlaying ? Icons.pause : Icons.play;
+    const label = isPlaying ? "Pause" : "Play";
+    animPlayBtn.title = label; animPlayBtn.setAttribute("aria-label", label);
+  }
+  if(animRepeatBtn){
+    animRepeatBtn.innerHTML = anim.repeat === "one" ? Icons.repeatOne : Icons.repeat;
+    const label = anim.repeat === "one" ? "Repeat: this path"
+                : anim.repeat === "all" ? "Repeat: all paths"
+                : "Repeat: off";
+    animRepeatBtn.title = label; animRepeatBtn.setAttribute("aria-label", label);
+    animRepeatBtn.classList.toggle("on", anim.repeat !== "off");
+  }
+  animAllBtn?.classList.toggle("on", anim.mode === "together");
+  cinemaBtn ?.classList.toggle("on", cinema);
 }
-syncAnimButtons();
 
 // ---- Corner buttons ------------------------------------------------------
 const pathsIconOn  = Icons.eyeOn;
 const pathsIconOff = Icons.eyeOff;
 corners.innerHTML =
-  `<button class="corner-btn icon-only" id="pathsBtn" title="Hide paths" aria-label="Hide paths">${pathsIconOn}</button>` +
-  `<button class="corner-btn icon-only" id="fitBtn"   title="Reset view">${Icons.fit}</button>` +
-  `<button class="corner-btn icon-only" id="themeBtn" title="Toggle theme">${Icons.theme}</button>`;
-const pathsBtn = document.getElementById("pathsBtn");
+  `<button class="corner-btn icon-only" id="cinemaBtn" title="Cinematic fly-through" aria-label="Cinematic fly-through">${Icons.cinema}</button>` +
+  `<button class="corner-btn icon-only" id="pathsBtn"  title="Hide paths" aria-label="Hide paths">${pathsIconOn}</button>` +
+  `<button class="corner-btn icon-only" id="fitBtn"    title="Reset view">${Icons.fit}</button>` +
+  `<button class="corner-btn icon-only" id="themeBtn"  title="Toggle theme">${Icons.theme}</button>`;
+const pathsBtn  = document.getElementById("pathsBtn");
+const cinemaBtn = document.getElementById("cinemaBtn");
 document.getElementById("fitBtn").onclick = resetCamera;
 document.getElementById("themeBtn").onclick = () => Store.setTheme(Store.theme === "dark" ? "light" : "dark");
+cinemaBtn.onclick = animToggleCinema;
 pathsBtn.onclick = () => {
   showPaths = !showPaths;
   pathsBtn.innerHTML = showPaths ? pathsIconOn : pathsIconOff;
   const label = showPaths ? "Hide paths" : "Show paths";
   pathsBtn.title = label; pathsBtn.setAttribute("aria-label", label);
 };
+// Now that every button exists, sync their initial visual state.
+syncAnimButtons();
 
 // ---- Shared nav ---------------------------------------------------------
 initQuickNav({current:"landscape", actions:[
