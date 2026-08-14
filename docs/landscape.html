@@ -46,9 +46,9 @@
       <span class="val" id="heightVal">100%</span>
     </div>
     <div class="slider-row">
-      <label>Curve</label>
-      <input type="range" id="curveSlider" min="0" max="100" value="0" step="1">
-      <span class="val" id="curveVal">0%</span>
+      <label>Size</label>
+      <input type="range" id="sizeSlider" min="0" max="100" value="40" step="1">
+      <span class="val" id="sizeVal">40%</span>
     </div>
     <div class="keys">
       <b>drag</b> rotate · <b>middle-drag</b> pan · <b>wheel</b> zoom · <b>R</b> reset · <b>Space</b> auto-rotate · <b>P</b> screenshot
@@ -67,31 +67,32 @@
 
 /* ============================================================
    3D LANDSCAPE — a custom canvas pipeline (no Three.js). Stations occupy the
-   X-Z plane at the flat map's coordinates; Y is traffic-derived height, with
-   an optional spherical bulge (curvature slider) that lifts the middle so the
-   whole terrain reads as a mini-planet section. Left-drag rotates, middle-drag
-   pans, wheel zooms.
+   X-Z plane at the flat map's coordinates; Y is traffic-derived height, scaled
+   by the Height slider. Left-drag rotates (pitch is fully free — top-down,
+   side-on, or below the floor), middle-drag pans, wheel zooms. The Size slider
+   controls how strongly cap radius reflects a station's traffic.
    ============================================================ */
 
 const cv = document.getElementById("scene");
 const ctx = cv.getContext("2d");
 const meta = document.getElementById("meta");
 const corners = document.getElementById("corners");
-const curveSlider = document.getElementById("curveSlider");
-const curveVal = document.getElementById("curveVal");
 const heightSlider = document.getElementById("heightSlider");
 const heightVal = document.getElementById("heightVal");
+const sizeSlider = document.getElementById("sizeSlider");
+const sizeVal = document.getElementById("sizeVal");
 
 document.documentElement.dataset.theme = Store.theme;
 
 // ---- Camera state --------------------------------------------------------
-let yaw = 0.62, pitch = -0.48;
-let dist = 1750;
+const INIT_YAW = 0.62, INIT_PITCH = -0.48, INIT_DIST = 875;
+let yaw = INIT_YAW, pitch = INIT_PITCH;
+let dist = INIT_DIST;
 let panX = 0, panY = 0;                 // screen-space translation
 let autoRotate = true;
 let showPaths = true;
-let curvature = 0;                       // 0..1
 let heightScale = 1;                     // 0..2 — user-controlled height multiplier
+let sizeContrast = 0.4;                  // 0..1 — cap-radius spread across traffic
 let dragMode = null;                     // "rotate" | "pan" | null
 let dragStart = null;
 const FOV = 720;
@@ -99,7 +100,6 @@ let cx = 0, cy = 0;
 
 const WORLD_BOX = {w:1400, h:820};
 const worldCenter = {x: WORLD_BOX.w/2, y: 0, z: WORLD_BOX.h/2};
-const dMaxWorld = Math.hypot(WORLD_BOX.w/2, WORLD_BOX.h/2);
 
 function resize(){
   const dpr = Math.min(devicePixelRatio||1, 2);
@@ -112,35 +112,13 @@ function resize(){
 addEventListener("resize", resize); resize();
 
 // ---- 3D → 2D projection --------------------------------------------------
-// The flat plane is optionally wrapped onto a sphere (curvature slider): every
-// point — grid, stations, path samples — is remapped so radial distance from
-// world center rides the surface of a sphere whose subtended half-angle scales
-// with curvature. At 0% flat; at 100% the map wraps close to a full hemisphere,
-// with the horizon rolling down and inward like a mini-planet.
-//   dz sign is inverted so the *bottom* of the tablet map (high n.y) sits
-//   closer to the camera, matching the tablet + projection left/right/top/bottom
-//   convention.
-function sphericalWrap(dx, dz, wy){
-  if(curvature < 0.005) return {x: dx, y: wy, z: dz};
-  const theta_max = curvature * Math.PI * 0.8;   // up to ~144° at slider = 100%
-  const R = dMaxWorld / theta_max;
-  const dPlane = Math.hypot(dx, dz);
-  if(dPlane < 0.001){
-    return {x: 0, y: wy + R * (1 - Math.cos(theta_max)), z: 0};
-  }
-  const theta = dPlane / R;
-  const horizScale = (R * Math.sin(theta)) / dPlane;   // radial compression
-  const lift = R * (Math.cos(theta) - Math.cos(theta_max));
-  // Radial vertex lift: at the pole (dPlane=0) the point rides the top of the
-  // sphere; at dPlane=dMax it sits on the equator with lift=0. wy (station
-  // height) is added on top so vertical columns still stand normal to the flat
-  // reference plane, not the sphere surface — that keeps the tops readable.
-  return {x: dx * horizScale, y: wy + lift, z: dz * horizScale};
-}
+// dz is negated so the bottom of the tablet map (high n.y) sits *closer* to
+// the camera — matches the left/right/top/bottom convention of the tablet and
+// the projection wall.
 function project(wx, wy, wz){
-  const rawDx = wx - worldCenter.x;
-  const rawDz = worldCenter.z - wz;   // flip so tablet-bottom → near camera
-  const {x, y, z} = sphericalWrap(rawDx, rawDz, wy - worldCenter.y);
+  const x = wx - worldCenter.x;
+  const z = worldCenter.z - wz;
+  const y = wy - worldCenter.y;
   const cy_ = Math.cos(yaw),  sy_ = Math.sin(yaw);
   const cp_ = Math.cos(pitch), sp_ = Math.sin(pitch);
   const x1 = x*cy_ - z*sy_;
@@ -310,21 +288,26 @@ function frame(ts){
     return {n, h, base, top, depth:top.depth, traffic:A.traffic[n.id]||0};
   }).filter(Boolean).sort((a,b)=> b.depth - a.depth);
 
+  // Cap radius: linear ramp from tNorm (traffic/peak). sizeContrast controls
+  // the spread — at 0 every station is roughly the same size; at 1 the biggest
+  // station is ~90 world-px across and the smallest is a dot.
+  const capMaxPx = 4 + sizeContrast * 90;
   for(const st of stationRender){
     const col = catColor(st.n.c, Store.theme);
+    const tNorm = st.traffic / maxTraffic;
+    const capR = 2 + tNorm * capMaxPx;
     ctx.strokeStyle = col; ctx.lineWidth = 1.2;
     dashedLine(st.base, st.top, 5, 4, 0.75);
     ctx.save();
     ctx.globalAlpha = 0.55;
     ctx.strokeStyle = col; ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(st.base.x, st.base.y, Math.max(3, 4 * st.base.scale), 0, 7);
+    ctx.arc(st.base.x, st.base.y, Math.max(2, capR * 0.55 * st.base.scale), 0, 7);
     ctx.stroke();
     ctx.restore();
     ctx.save();
     ctx.fillStyle = col;
     ctx.beginPath();
-    const capR = 3 + Math.min(6, st.traffic*0.15);
     ctx.arc(st.top.x, st.top.y, capR, 0, 7);
     ctx.fill();
     ctx.restore();
@@ -377,8 +360,10 @@ cv.addEventListener("pointermove", e => {
     panX = dragStart.panX + dx;
     panY = dragStart.panY + dy;
   } else {
+    // No pitch clamp — camera is fully free: top-down, side-on, from below,
+    // whatever the user wants. Only clamped to ±π so drag can't run away.
     yaw = dragStart.yaw + dx * 0.005;
-    pitch = Math.max(-1.2, Math.min(0.1, dragStart.pitch - dy * 0.005));
+    pitch = Math.max(-Math.PI, Math.min(Math.PI, dragStart.pitch - dy * 0.005));
   }
 });
 const endDrag = () => { dragMode = null; };
@@ -388,13 +373,15 @@ cv.addEventListener("pointercancel", endDrag);
 cv.addEventListener("auxclick", e => { if(e.button === 1) e.preventDefault(); });
 cv.addEventListener("wheel", e => {
   e.preventDefault();
-  dist = Math.max(600, Math.min(4500, dist * (e.deltaY > 0 ? 1.1 : 1/1.1)));
+  dist = Math.max(250, Math.min(4500, dist * (e.deltaY > 0 ? 1.1 : 1/1.1)));
 }, {passive:false});
 
+function resetCamera(){
+  yaw = INIT_YAW; pitch = INIT_PITCH; dist = INIT_DIST; panX = 0; panY = 0;
+}
+
 addEventListener("keydown", e => {
-  if(e.key === "r" || e.key === "R"){
-    yaw = 0.62; pitch = -0.48; dist = 1750; panX = 0; panY = 0;
-  }
+  if(e.key === "r" || e.key === "R") resetCamera();
   if(e.key === " "){ e.preventDefault(); autoRotate = !autoRotate; }
   if(e.key === "p" || e.key === "P"){
     const link = document.createElement("a");
@@ -405,18 +392,18 @@ addEventListener("keydown", e => {
 });
 
 // ---- Sliders -----------------------------------------------------------
-function updateCurve(){
-  curvature = (+curveSlider.value)/100;
-  curveVal.textContent = curveSlider.value + "%";
-}
-curveSlider.addEventListener("input", updateCurve);
-updateCurve();
 function updateHeight(){
   heightScale = (+heightSlider.value)/100;
   heightVal.textContent = heightSlider.value + "%";
 }
 heightSlider.addEventListener("input", updateHeight);
 updateHeight();
+function updateSize(){
+  sizeContrast = (+sizeSlider.value)/100;
+  sizeVal.textContent = sizeSlider.value + "%";
+}
+sizeSlider.addEventListener("input", updateSize);
+updateSize();
 
 // ---- Corner buttons ------------------------------------------------------
 const pathsIconOn  = Icons.eyeOn;
@@ -426,9 +413,7 @@ corners.innerHTML =
   `<button class="corner-btn icon-only" id="fitBtn"   title="Reset view">${Icons.fit}</button>` +
   `<button class="corner-btn icon-only" id="themeBtn" title="Toggle theme">${Icons.theme}</button>`;
 const pathsBtn = document.getElementById("pathsBtn");
-document.getElementById("fitBtn").onclick = () => {
-  yaw = 0.62; pitch = -0.48; dist = 1750; panX = 0; panY = 0;
-};
+document.getElementById("fitBtn").onclick = resetCamera;
 document.getElementById("themeBtn").onclick = () => Store.setTheme(Store.theme === "dark" ? "light" : "dark");
 pathsBtn.onclick = () => {
   showPaths = !showPaths;
@@ -439,7 +424,7 @@ pathsBtn.onclick = () => {
 
 // ---- Shared nav ---------------------------------------------------------
 initQuickNav({current:"landscape", actions:[
-  {html: Icons.fit,   title:"Reset view",  onClick:()=>{ yaw=0.62; pitch=-0.48; dist=1750; panX=0; panY=0; }},
+  {html: Icons.fit,   title:"Reset view",  onClick:resetCamera},
   {html: Icons.theme, title:"Toggle theme", onClick:()=>Store.setTheme(Store.theme==="dark"?"light":"dark")}
 ]});
 
