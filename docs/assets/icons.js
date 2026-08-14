@@ -76,6 +76,21 @@ const Icons = {
       '<path d="M4 4 L 16 16" stroke-width="2"/>' +
     '</svg>',
 
+  // Filled square — reads as "stop" against the play/pause pair.
+  stop:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="currentColor">' +
+      '<rect x="4.5" y="4.5" width="11" height="11"/>' +
+    '</svg>',
+
+  // Circular arrow with arrowhead — the universal "repeat / loop" glyph.
+  repeat:
+    '<svg class="icon" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M4 8 A6 6 0 0 1 15 6.5"/>' +
+      '<path d="M16 8 V4 h-4"/>' +
+      '<path d="M16 12 A6 6 0 0 1 5 13.5"/>' +
+      '<path d="M4 12 V16 h4"/>' +
+    '</svg>',
+
   // Trash / delete — reused by the archive card delete.
   trash:
     '<svg class="icon" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +

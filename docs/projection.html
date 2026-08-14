@@ -32,6 +32,16 @@ const el=(tag,cls,html)=>{const e=document.createElement(tag); if(cls)e.classNam
 
 const cv=document.getElementById("cv");
 const view=new MapView(cv,{role:"projection", labels:true, showAggregate:true, navigable:true});
+// The right side has the vertical stats column — nudging the whole map 50px
+// right centers it against the stats/legend chrome instead of dead-center on
+// the raw canvas. Preserved across resetView so double-click / Fit stays here.
+const MAP_INITIAL_DX = 50;
+view.user.dx = MAP_INITIAL_DX; view.dirty = true;
+const _origReset = view.resetView.bind(view);
+view.resetView = () => { _origReset(); view.user.dx = MAP_INITIAL_DX; view.dirty = true; };
+// Reverse lookup for CATS: full mood name (e.g. "Friction & Resistance") → key.
+// Used by the bulletin painter to colour {Mood Name} spans by their category.
+const CAT_BY_NAME=Object.fromEntries(Object.entries(CATS).map(([k,v])=>[v.name,k]));
 
 const legend=document.getElementById("legend");
 // Small title above the coloured swatches so a viewer parses the block as
@@ -101,17 +111,26 @@ function toggleBulletinVisibility(){
 }
 const reduced=matchMedia("(prefers-reduced-motion:reduce)").matches;
 const GLYPH="▚▞▛▜▙▟█▖▗▘▝";
-function scramble(node, text){
-  if(reduced){ node.innerHTML=text; return }
+// One live scramble interval at a time — a new bulletin cancels the previous
+// one so intervals never overlap and race for line.innerHTML.
+let scrambleIv=null;
+function scramble(node, text, onDone){
+  clearInterval(scrambleIv); scrambleIv=null;
+  if(reduced){ node.innerHTML=text; onDone&&onDone(); return }
   const chars=[...text]; let f=0;
-  const iv=setInterval(()=>{
+  scrambleIv=setInterval(()=>{
     f++;
     node.innerHTML=chars.map((ch,i)=>{
       if(ch===" ") return " ";
       if(i < f*2.2) return ch;
       return `<span style="opacity:.35">${GLYPH[(Math.random()*GLYPH.length)|0]}</span>`;
     }).join("");
-    if(f*2.2>chars.length){clearInterval(iv); node.innerHTML=text}
+    if(f*2.2>chars.length){
+      clearInterval(scrambleIv); scrambleIv=null;
+      // Final swap happens INSIDE the callback so the caller can install
+      // rich HTML (with per-station color spans) instead of plain text.
+      onDone ? onDone() : (node.innerHTML=text);
+    }
   },26);
 }
 const bulletinBar = document.querySelector(".bulletin-bar");
@@ -130,9 +149,24 @@ function paint(b){
   tag.textContent=b.tag;
   const accent = b.accent ? catColor(b.accent, Store.theme) : null;
   line.style.setProperty("--accent", accent||"");
-  const html=b.line.replace(/\{([^}]+)\}/g, (_,m)=>`<span class="hi">${m}</span>`);
-  scramble(line, html.replace(/<[^>]+>/g,""));
-  setTimeout(()=>{ if(current===b) line.innerHTML=html }, reduced?0:520);
+  // Each {name} resolves to a specific color: station name → its category
+  // color; category name → that category's color. Anything else (numbers,
+  // free text) falls back to --accent.
+  const html=b.line.replace(/\{([^}]+)\}/g, (_,m)=>{
+    let col = null;
+    const node = NODE_BY_NAME[m];
+    if(node) col = catColor(node.c, Store.theme);
+    else if(CAT_BY_NAME[m]) col = catColor(CAT_BY_NAME[m], Store.theme);
+    return col ? `<span class="hi" style="color:${col}">${m}</span>`
+               : `<span class="hi">${m}</span>`;
+  });
+  // Scramble runs first; when it finishes, install the styled HTML so the
+  // per-station color spans actually appear. The old fixed 520ms setTimeout
+  // fired *during* scrambling on longer bulletins and got overwritten back
+  // to plain text — hence "text is only white".
+  scramble(line, html.replace(/<[^>]+>/g,""), ()=>{
+    if(current===b) line.innerHTML=html;
+  });
   sub.textContent=b.sub||"";
   view.setFocus(b.focus||null);
 }
@@ -198,7 +232,88 @@ document.addEventListener("keydown",e=>{
   if(e.key==="t")Store.setTheme("projection",Store.theme==="dark"?"light":"dark");
   if(e.key==="r")view.resetView();
   if(e.key==="f"){ const d=document.documentElement; document.fullscreenElement?document.exitFullscreen():d.requestFullscreen&&d.requestFullscreen() }
+  if(e.key==="p"||e.key==="P") screenshotFullPage();
 });
+
+// Full-page screenshot (P). Composites the wall canvas + every DOM overlay
+// (title, stats, legend, bulletin bar) into a single PNG. Approach:
+//   1. Snapshot the <canvas> to a data URL — foreignObject can't render live
+//      <canvas> pixels, only DOM.
+//   2. Clone the body, swap the canvas for an <img> at the same box.
+//   3. Inline every stylesheet and rewrite relative url() refs to absolute
+//      so @font-face resources still resolve under the SVG's blob origin.
+//      Cross-origin fonts load because sync-server sets Allow-Origin: *.
+//   4. Wrap the whole clone in an SVG <foreignObject>, draw the SVG onto an
+//      output canvas at 2× DPR, save.
+// Falls back to a canvas-only PNG if the SVG image fails to load or the
+// output canvas is tainted (e.g. font served without CORS in cloud mode).
+function screenshotFullPage(){
+  const w = innerWidth, h = innerHeight, dpr = 2;
+  const filename = `mood-topography-projection-${Date.now()}.png`;
+  const saveDataUrl = url => { const a=document.createElement("a"); a.download=filename; a.href=url; a.click(); };
+
+  let cvUrl;
+  try { cvUrl = cv.toDataURL("image/png"); }
+  catch(err){ console.warn("Screenshot: canvas snapshot failed", err); return saveCanvasOnly(); }
+  const cvRect = cv.getBoundingClientRect();
+
+  // Inline stylesheets, absolutise every url(...) so the SVG blob context
+  // can still fetch them.
+  const cssText = [...document.styleSheets].map(s => {
+    try { return [...s.cssRules].map(r => r.cssText).join("\n"); }
+    catch(err){ return ""; }
+  }).join("\n").replace(/url\((["']?)([^"')]+)\1\)/g, (m, q, u) => {
+    if(/^(data:|https?:|blob:)/.test(u)) return m;
+    return `url("${new URL(u, location.href).href}")`;
+  });
+
+  // Clone body, replace the <canvas> with an <img> holding the snapshot.
+  const clone = document.body.cloneNode(true);
+  const c2 = clone.querySelector("#cv");
+  if(c2){
+    const img = document.createElement("img");
+    img.setAttribute("src", cvUrl);
+    img.setAttribute("style", `display:block;width:${cvRect.width}px;height:${cvRect.height}px`);
+    c2.replaceWith(img);
+  }
+  // Strip anything invisible or interactive-only so it doesn't leak into the frame.
+  clone.querySelectorAll(".nav-handle,.quicknav,script").forEach(n => n.remove());
+
+  const theme = document.documentElement.dataset.theme || "dark";
+  const bodyHtml = new XMLSerializer().serializeToString(clone);
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">` +
+      `<foreignObject width="100%" height="100%">` +
+        `<html xmlns="http://www.w3.org/1999/xhtml" data-theme="${theme}">` +
+          `<head><meta charset="utf-8"/><style>${cssText}</style></head>` +
+          bodyHtml +
+        `</html>` +
+      `</foreignObject>` +
+    `</svg>`;
+
+  const blob = new Blob([svg], {type:"image/svg+xml;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const img2 = new Image();
+  img2.onload = () => {
+    URL.revokeObjectURL(url);
+    const out = document.createElement("canvas");
+    out.width = w*dpr; out.height = h*dpr;
+    const oc = out.getContext("2d");
+    oc.drawImage(img2, 0, 0, w, h);
+    try { saveDataUrl(out.toDataURL("image/png")); }
+    catch(err){ console.warn("Screenshot: output canvas tainted", err); saveCanvasOnly(); }
+  };
+  img2.onerror = err => {
+    URL.revokeObjectURL(url);
+    console.warn("Screenshot: SVG render failed, falling back to canvas-only", err);
+    saveCanvasOnly();
+  };
+  img2.src = url;
+  function saveCanvasOnly(){
+    try { saveDataUrl(cv.toDataURL("image/png")); }
+    catch(err){ alert("Screenshot failed. Use OS screenshot (Win+Shift+S) instead."); }
+  }
+}
 
 Sync.hello();
 </script>

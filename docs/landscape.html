@@ -21,12 +21,21 @@
   .hud .meta b{color:var(--ink-2);font-weight:600}
   .hud .keys{font-size:9px;color:var(--ink-3);line-height:1.7}
   .hud .keys b{color:var(--ink);font-weight:700;background:rgba(127,127,127,.14);padding:1px 5px}
-  .hud .slider-row{display:flex;align-items:center;gap:10px;pointer-events:auto;
-    background:var(--panel);box-shadow:inset 0 0 0 1px var(--hair);padding:8px 12px;
-    backdrop-filter:blur(8px)}
-  .hud .slider-row label{font-size:9px;color:var(--ink-3);letter-spacing:.18em}
-  .hud .slider-row input[type=range]{width:130px;accent-color:var(--ink-2);cursor:ew-resize}
-  .hud .slider-row .val{font-size:9px;color:var(--ink);width:2.5em;text-align:right;font-weight:700}
+  .hud .control-panel{background:var(--panel);box-shadow:inset 0 0 0 1px var(--hair);
+    backdrop-filter:blur(8px);pointer-events:auto;display:flex;flex-direction:column;min-width:300px}
+  .hud .slider-row{display:flex;align-items:center;gap:10px;padding:6px 12px}
+  .hud .slider-row + .slider-row{padding-top:0}
+  .hud .slider-row label{font-size:9px;color:var(--ink-3);letter-spacing:.18em;width:3.2em}
+  .hud .slider-row input[type=range]{flex:1;accent-color:var(--ink-2);cursor:ew-resize}
+  .hud .slider-row .val{font-size:9px;color:var(--ink);width:2.8em;text-align:right;font-weight:700}
+  .hud .anim-row{display:flex;justify-content:space-between;gap:2px;padding:6px 6px 6px;
+    border-top:1px solid var(--hair);margin-top:4px}
+  .hud .anim-row button{background:transparent;color:var(--ink-3);border:0;padding:5px 8px;cursor:pointer;
+    font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.18em;text-transform:uppercase;
+    display:flex;align-items:center;justify-content:center;gap:5px;flex:1}
+  .hud .anim-row button:hover{color:var(--ink)}
+  .hud .anim-row button.on{color:var(--ink);background:rgba(127,127,127,.14)}
+  .hud .anim-row button svg{width:12px;height:12px;display:block}
   .corner-btns{position:absolute;top:var(--pad);right:var(--pad);display:flex;gap:6px;pointer-events:auto;z-index:6}
   .corner-btns .corner-btn{position:relative;top:auto;right:auto}
 </style>
@@ -40,15 +49,23 @@
     <div class="meta" id="meta"></div>
   </div>
   <div class="hud br">
-    <div class="slider-row">
-      <label>Height</label>
-      <input type="range" id="heightSlider" min="0" max="200" value="100" step="1">
-      <span class="val" id="heightVal">100%</span>
-    </div>
-    <div class="slider-row">
-      <label>Size</label>
-      <input type="range" id="sizeSlider" min="0" max="100" value="40" step="1">
-      <span class="val" id="sizeVal">40%</span>
+    <div class="control-panel">
+      <div class="slider-row">
+        <label>Height</label>
+        <input type="range" id="heightSlider" min="0" max="200" value="45" step="1">
+        <span class="val" id="heightVal">45%</span>
+      </div>
+      <div class="slider-row">
+        <label>Size</label>
+        <input type="range" id="sizeSlider" min="0" max="100" value="10" step="1">
+        <span class="val" id="sizeVal">10%</span>
+      </div>
+      <div class="slider-row">
+        <label>Opacity</label>
+        <input type="range" id="opacitySlider" min="0" max="200" value="75" step="1">
+        <span class="val" id="opacityVal">75%</span>
+      </div>
+      <div class="anim-row" id="animRow"></div>
     </div>
     <div class="keys">
       <b>drag</b> rotate · <b>middle-drag</b> pan · <b>wheel</b> zoom · <b>R</b> reset · <b>Space</b> auto-rotate · <b>P</b> screenshot
@@ -81,20 +98,49 @@ const heightSlider = document.getElementById("heightSlider");
 const heightVal = document.getElementById("heightVal");
 const sizeSlider = document.getElementById("sizeSlider");
 const sizeVal = document.getElementById("sizeVal");
+const opacitySlider = document.getElementById("opacitySlider");
+const opacityVal = document.getElementById("opacityVal");
 
 document.documentElement.dataset.theme = Store.theme;
 
 // ---- Camera state --------------------------------------------------------
-const INIT_YAW = 0.62, INIT_PITCH = -0.48, INIT_DIST = 875;
+// Frontal-with-a-tilt: yaw=0 lines up left/right with the tablet/projection;
+// a small negative pitch drops the horizon so height columns stay visible.
+const INIT_YAW = 0, INIT_PITCH = -0.35, INIT_DIST = 875;
 let yaw = INIT_YAW, pitch = INIT_PITCH;
 let dist = INIT_DIST;
 let panX = 0, panY = 0;                 // screen-space translation
-let autoRotate = true;
+let autoRotate = false;                 // off by default so the initial view is stable
 let showPaths = true;
-let heightScale = 1;                     // 0..2 — user-controlled height multiplier
-let sizeContrast = 0.4;                  // 0..1 — cap-radius spread across traffic
+let heightScale = 0.45;                  // 0..2 — user-controlled height multiplier
+let sizeContrast = 0.10;                 // 0..1 — cap-radius spread across traffic
+let pathOpacity = 0.75;                  // 0..2 — user-controlled path alpha multiplier
 let dragMode = null;                     // "rotate" | "pan" | null
 let dragStart = null;
+// Path animation controller. Time-based so stagger (in ALL) and repeat gaps
+// fall out naturally.
+//   mode: null     — no animation, all paths drawn statically
+//         "single" — draws one specific path, stops on completion
+//         "seq"    — cycles paths one after another (always loops)
+//         "together"— every path draws simultaneously, staggered starts
+//   index:   focus path (for single/seq; ignored by together)
+//   t:       seconds since the current cycle started
+//   playing: false pauses time advancement in place
+//   repeat:  when true, single/together loop; seq always loops regardless
+let anim = { mode:null, index:0, t:0, playing:false, repeat:false };
+const ANIM_DURATION = 3.2;               // seconds to draw one path start-to-end
+const ALL_STAGGER   = 0.35;              // per-path start offset in ALL mode
+const REPEAT_GAP    = 0.9;               // pause between cycles when repeat is on
+
+// Linear interpolation between two #RRGGBB colors → 'rgb(r,g,b)'. Cheap enough
+// to call per spline segment; drives the gradient stroke below.
+function hexLerp(a, b, t){
+  const pa = a.replace('#',''), pb = b.replace('#','');
+  const ar=parseInt(pa.slice(0,2),16), ag=parseInt(pa.slice(2,4),16), ab=parseInt(pa.slice(4,6),16);
+  const br=parseInt(pb.slice(0,2),16), bg=parseInt(pb.slice(2,4),16), bb=parseInt(pb.slice(4,6),16);
+  const r=Math.round(ar+(br-ar)*t), g=Math.round(ag+(bg-ag)*t), b2=Math.round(ab+(bb-ab)*t);
+  return `rgb(${r},${g},${b2})`;
+}
 const FOV = 720;
 let cx = 0, cy = 0;
 
@@ -186,6 +232,32 @@ function dashedLine(p0, p1, dash=6, gap=6, alpha=1){
   ctx.restore();
 }
 
+// Stroke a polyline where color drifts from one node's mood color to the next.
+// scr is the screen-projected spline; colors is one color per original path
+// node (length = p.nodes.length). Each spline segment picks its color by
+// interpolating between the two node colors it sits between along the path.
+function drawGradientStroke(scr, colors, cutoff, alpha, lineWidth, comp){
+  const end = Math.min(cutoff, scr.length);
+  if(end < 2 || alpha <= 0) return;
+  const total = scr.length - 1;
+  const N = colors.length;
+  ctx.save();
+  ctx.globalCompositeOperation = comp;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = "round";
+  ctx.globalAlpha = alpha;
+  for(let i=0; i<end-1; i++){
+    const tPath = (i + 0.5) / total * (N - 1);
+    const seg = Math.min(N - 2, Math.max(0, Math.floor(tPath)));
+    ctx.strokeStyle = hexLerp(colors[seg], colors[seg+1], tPath - seg);
+    ctx.beginPath();
+    ctx.moveTo(scr[i].x, scr[i].y);
+    ctx.lineTo(scr[i+1].x, scr[i+1].y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function spline3D(pts, samples=18){
   if(pts.length < 2) return pts.slice();
   const P = [pts[0], ...pts, pts[pts.length-1]];
@@ -210,6 +282,7 @@ function frame(ts){
   const dt = Math.min(0.05, (ts - lastTs)/1000);
   lastTs = ts;
   if(autoRotate && !dragMode) yaw += dt * 0.14;
+  advanceAnim(dt);
   const A = computeMaxTraffic();
   const P = palette();
 
@@ -249,6 +322,7 @@ function frame(ts){
   // ----- Aggregate paths as 3D curves (skipped when hidden) -----
   if(showPaths){
     const pathsRender = [];
+    let playableIdx = 0;
     for(const p of Store.paths){
       if(p.nodes.length < 2) continue;
       const worldPts = p.nodes.map(id => {
@@ -260,22 +334,54 @@ function frame(ts){
       });
       const spl = spline3D(worldPts, 16);
       const scr = spl.map(q => project(q.x, q.y, q.z)).filter(Boolean);
-      if(scr.length < 2) continue;
+      if(scr.length < 2){ playableIdx++; continue; }
       const avgDepth = scr.reduce((a,b)=>a+b.depth,0) / scr.length;
-      pathsRender.push({p, scr, avgDepth});
+      // idx is the position among *playable* paths — matches what
+      // pathProgress() and playablePathCount() count.
+      pathsRender.push({p, scr, avgDepth, idx:playableIdx});
+      playableIdx++;
     }
     pathsRender.sort((a,b)=> b.avgDepth - a.avgDepth);
-    for(const {p, scr} of pathsRender){
-      const c = catColor(NODES[p.nodes[0]].c, Store.theme);
-      ctx.save();
-      ctx.globalCompositeOperation = P.pathComp;
-      ctx.strokeStyle = c;
-      ctx.lineWidth = 1.6;
-      ctx.globalAlpha = p.seeded ? P.pathSeed : P.pathReal;
-      ctx.beginPath();
-      scr.forEach((q,i)=> i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y));
-      ctx.stroke();
-      ctx.restore();
+    const animating = anim.mode !== null;
+    const together = anim.mode === "together";
+    const playCount = pathsRender.length;
+    for(const {p, scr, idx} of pathsRender){
+      // Per-node colors so the stroke can drift from mood to mood along the
+      // path — same "gradient path" effect as the flat map view.
+      const colors = p.nodes.map(id => catColor(NODES[id].c, Store.theme));
+      const baseAlpha = p.seeded ? P.pathSeed : P.pathReal;
+      let alpha, cutoff, lineWidth;
+      if(animating){
+        const prog = pathProgress(idx, playCount);
+        // Together: every path is a "focus". Single/seq: only the focused index
+        // draws; other paths dim so the animation reads clearly.
+        const isFocus = together || idx === anim.index;
+        alpha = isFocus ? 1 : baseAlpha * 0.18;
+        lineWidth = isFocus ? 2.6 : 1.6;
+        cutoff = isFocus ? Math.max(2, Math.floor(scr.length * prog)) : scr.length;
+        // In together mode a path not yet started (prog=0) should render nothing.
+        if(together && prog <= 0) continue;
+      } else {
+        alpha = baseAlpha;
+        lineWidth = 1.6;
+        cutoff = scr.length;
+      }
+      alpha = Math.max(0, Math.min(1, alpha * pathOpacity));
+      drawGradientStroke(scr, colors, cutoff, alpha, lineWidth, P.pathComp);
+      // Bright head at the drawing tip — reads as "ink still flowing".
+      const drawing = animating && cutoff < scr.length && cutoff >= 2;
+      if(drawing){
+        const head = scr[cutoff-1];
+        const t = ((cutoff - 1) / Math.max(1, scr.length - 1)) * (colors.length - 1);
+        const seg = Math.min(colors.length - 2, Math.floor(t));
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = hexLerp(colors[seg], colors[seg+1], t - seg);
+        ctx.beginPath();
+        ctx.arc(head.x, head.y, 4.5, 0, 7);
+        ctx.fill();
+        ctx.restore();
+      }
     }
   }
 
@@ -391,6 +497,87 @@ addEventListener("keydown", e => {
   }
 });
 
+// ---- Path animation controller ------------------------------------------
+// Order matches Store.paths (insertion order = cast order, seeded first).
+function playablePathCount(){
+  return Store.paths.filter(p => p.nodes.length >= 2).length;
+}
+// How long a full ALL cycle lasts: last path's start + its draw + repeat gap.
+function togetherCycle(count){
+  return ANIM_DURATION + Math.max(0, count-1) * ALL_STAGGER + REPEAT_GAP;
+}
+function advanceAnim(dt){
+  if(!anim.mode || !anim.playing) return;
+  const count = playablePathCount();
+  if(!count){ animStop(); return; }
+  anim.t += dt;
+  if(anim.mode === "seq"){
+    // Default: after each path completes, advance to the next (one-after-another).
+    // With Repeat on: loop the SAME current path over and over instead.
+    if(anim.t >= ANIM_DURATION){
+      if(!anim.repeat) anim.index = (anim.index + 1) % count;
+      anim.t = 0;
+    }
+  } else if(anim.mode === "single"){
+    if(anim.t >= ANIM_DURATION){
+      if(anim.repeat){ anim.t = 0; }
+      else { anim.t = ANIM_DURATION; anim.playing = false; syncAnimButtons(); }
+    }
+  } else if(anim.mode === "together"){
+    const cycle = togetherCycle(count);
+    if(anim.t >= cycle){
+      if(anim.repeat){ anim.t = 0; }
+      else { anim.t = cycle; anim.playing = false; syncAnimButtons(); }
+    }
+  }
+}
+function animStart(mode, indexDelta){
+  const count = playablePathCount();
+  if(!count) return;
+  if(!anim.mode){ anim.index = 0; }
+  else if(indexDelta){ anim.index = (anim.index + indexDelta + count) % count; }
+  anim.mode = mode;
+  anim.t = 0;
+  anim.playing = true;
+  syncAnimButtons();
+}
+function animTogglePlay(){
+  if(!anim.mode){ animStart("single", 0); return; }
+  anim.playing = !anim.playing;
+  // If restarting a finished single/together, replay from the top.
+  if(anim.playing){
+    if(anim.mode === "single"    && anim.t >= ANIM_DURATION) anim.t = 0;
+    if(anim.mode === "together"){
+      const c = playablePathCount();
+      if(anim.t >= togetherCycle(c)) anim.t = 0;
+    }
+  }
+  syncAnimButtons();
+}
+function animStop(){
+  // Wipes the whole animation state; paths render statically again.
+  anim.mode = null;
+  anim.t = 0;
+  anim.playing = false;
+  syncAnimButtons();
+}
+function animToggleRepeat(){
+  anim.repeat = !anim.repeat;
+  syncAnimButtons();
+}
+// Per-path progress for the current frame. Only ever called when
+// anim.mode is truthy; returns 0..1 for the given path index/position.
+function pathProgress(idxInPlayable, count){
+  if(anim.mode === "together"){
+    const localT = anim.t - idxInPlayable * ALL_STAGGER;
+    if(localT <= 0) return 0;
+    return Math.min(1, localT / ANIM_DURATION);
+  }
+  // single & seq: only the focus path animates
+  if(idxInPlayable !== anim.index) return 0;
+  return Math.min(1, anim.t / ANIM_DURATION);
+}
+
 // ---- Sliders -----------------------------------------------------------
 function updateHeight(){
   heightScale = (+heightSlider.value)/100;
@@ -404,6 +591,45 @@ function updateSize(){
 }
 sizeSlider.addEventListener("input", updateSize);
 updateSize();
+function updateOpacity(){
+  pathOpacity = (+opacitySlider.value)/100;
+  opacityVal.textContent = opacitySlider.value + "%";
+}
+opacitySlider.addEventListener("input", updateOpacity);
+updateOpacity();
+
+// ---- Animation buttons ---------------------------------------------------
+const animRow = document.getElementById("animRow");
+animRow.innerHTML =
+  `<button id="animPrev"   title="Previous path" aria-label="Previous path">${Icons.prev}</button>` +
+  `<button id="animPlay"   title="Play"          aria-label="Play">${Icons.play}</button>` +
+  `<button id="animNext"   title="Next path"     aria-label="Next path">${Icons.next}</button>` +
+  `<button id="animStop"   title="Stop"          aria-label="Stop and return to static view">${Icons.stop}</button>` +
+  `<button id="animAll"    title="All at once (staggered)"  aria-label="Animate all together">ALL</button>` +
+  `<button id="animSeq"    title="One by one"    aria-label="Cycle paths one by one">ONE</button>` +
+  `<button id="animRepeat" title="Repeat"        aria-label="Repeat animation">${Icons.repeat}</button>`;
+const animPlayBtn   = document.getElementById("animPlay");
+const animStopBtn   = document.getElementById("animStop");
+const animAllBtn    = document.getElementById("animAll");
+const animSeqBtn    = document.getElementById("animSeq");
+const animRepeatBtn = document.getElementById("animRepeat");
+document.getElementById("animPrev").onclick = () => animStart("single", -1);
+document.getElementById("animNext").onclick = () => animStart("single", +1);
+animPlayBtn.onclick   = animTogglePlay;
+animStopBtn.onclick   = animStop;
+animAllBtn.onclick    = () => animStart("together", 0);
+animSeqBtn.onclick    = () => animStart("seq", 0);
+animRepeatBtn.onclick = animToggleRepeat;
+function syncAnimButtons(){
+  const isPlaying = anim.mode && anim.playing;
+  animPlayBtn.innerHTML = isPlaying ? Icons.pause : Icons.play;
+  const label = isPlaying ? "Pause" : "Play";
+  animPlayBtn.title = label; animPlayBtn.setAttribute("aria-label", label);
+  animAllBtn   .classList.toggle("on", anim.mode === "together");
+  animSeqBtn   .classList.toggle("on", anim.mode === "seq");
+  animRepeatBtn.classList.toggle("on", anim.repeat);
+}
+syncAnimButtons();
 
 // ---- Corner buttons ------------------------------------------------------
 const pathsIconOn  = Icons.eyeOn;

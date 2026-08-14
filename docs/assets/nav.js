@@ -52,9 +52,12 @@ function initQuickNav({current, actions=[]}={}){
   function toggle(){ bar.classList.contains("on") ? close() : open() }
 
   handle.addEventListener("click", toggle);
+  // While the pointer is over the bar the menu stays open indefinitely — no
+  // auto-close timer runs. Clicking a link/action does NOT re-arm the timer
+  // either, so multi-click flows (theme + fit + navigate) don't close the bar
+  // mid-use. Close only fires when the pointer actually leaves the bar.
   bar.addEventListener("pointerenter", ()=>clearTimeout(hideTimer));
   bar.addEventListener("pointerleave", ()=>{ hideTimer=setTimeout(close, 1200) });
-  bar.addEventListener("click", ()=>{ clearTimeout(hideTimer); hideTimer=setTimeout(close, 900) });
   document.addEventListener("keydown", e=>{
     if(e.key==="Escape") close();
     if(e.key==="m" && !bar.classList.contains("on")) open();
