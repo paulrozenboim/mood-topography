@@ -305,8 +305,7 @@ function castNow(ns){
   Store.addPath(p);
   lastCastIds = ns.slice();
   modalCommitted = true;                      // cast: closing resets for the next person
-  const anchorName = NODES[ns[0]].n;
-  mHead.textContent = `From ${anchorName}`;      // matches view.html's title format
+  mHead.textContent = "Your path";               // matches view.html's title exactly
   mSub.textContent = `${ns.length} stations, in order. This joins the wall.`;
   mMeta.style.display="flex";
   mMeta.innerHTML=`<span>№ ${p.id.toUpperCase()}</span><span>${new Date(p.t).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</span>`;

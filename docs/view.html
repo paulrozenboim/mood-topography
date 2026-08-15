@@ -79,11 +79,11 @@
     .print-qr{display:block!important;margin:2mm 0!important;text-align:center}
     .print-qr canvas{display:block!important;width:32mm!important;height:32mm!important;
       margin:0 auto!important;background:#fff!important}
-    .viewer .credits{margin-top:3mm!important;padding-top:2mm!important;
-      border-top:1px dashed #000!important;text-align:center;font-family:'Martian Mono',monospace}
-    .viewer .credits .row, .viewer .credits .row-link{display:block!important;
-      margin-bottom:0.6mm!important;font-size:7pt!important;line-height:1.4!important;
-      overflow-wrap:anywhere;text-align:center;padding:0!important;border:none!important}
+    /* The screen credits are suppressed entirely in print; .print-credits
+       (shared rules in style.css) carries the receipt version instead, so the
+       kiosk and the archive emit byte-identical footers. */
+    .viewer > .credits:not(.print-credits){display:none!important}
+    .viewer .print-credits{font-family:'Martian Mono',monospace}
   }
 </style>
 </head>
@@ -117,6 +117,16 @@
       <span>Made by <b>@unapaulogetic_</b></span>
       <span>instagram.com/unapaulogetic_ →</span>
     </a>
+  </div>
+  <!-- Print-only credits. The screen block above puts two spans on each row
+       (label left, value right) which collapses into run-together text on a
+       66mm receipt — "The Mood TopographyDemocracy Week". This mirrors the
+       kiosk receipt exactly: one centred line per row, no Instagram URL. -->
+  <div class="print-credits credits" aria-hidden="true">
+    <div class="row"><b>The Mood Topography</b></div>
+    <div class="row">Democracy Week · Tel Aviv · 2026</div>
+    <div class="row">Cast at Teder · <span id="printDate"></span></div>
+    <div class="row">Made by <b>@unapaulogetic_</b></div>
   </div>
 </div>
 
@@ -176,9 +186,9 @@ const query = readQuery();
 if(!ids.length){
   showEmpty("No constellation encoded in this link.");
 } else {
-  // Same wording as the cast receipt ("From <anchor>") so a reprint out of the
-  // archive matches the original slip the participant was handed.
-  title.textContent = `From ${NODES[ids[0]].n}`;
+  // Same wording as the cast receipt so a reprint out of the archive matches
+  // the original slip the participant was handed.
+  title.textContent = "Your path";
   // Print-only QR pointing back at this very page.
   renderQR(document.getElementById("printQR"), location.href, 150);
   const paintStops = () => {
@@ -190,11 +200,12 @@ if(!ids.length){
   paintStops();
 
   const dateEl = document.getElementById("castDate");
-  if(castTs){
-    dateEl.textContent = new Date(castTs).toLocaleString([], {dateStyle:"medium", timeStyle:"short"});
-  } else {
-    dateEl.textContent = "";
-  }
+  const printDateEl = document.getElementById("printDate");
+  const stamp = castTs
+    ? new Date(castTs).toLocaleString([], {dateStyle:"medium", timeStyle:"short"})
+    : "";
+  dateEl.textContent = stamp;
+  printDateEl.textContent = stamp;
 
   // Draw into the (hidden) canvas, then export to a PNG data URL and hand it to
   // the visible <img>. Mobile browsers offer "Save Image" on <img> long-press

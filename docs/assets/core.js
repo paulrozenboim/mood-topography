@@ -688,6 +688,9 @@ function strokeGradientPath(ctx, sp, catCodes, theme, opts={}){
    canvas's parent, reads its own theme tokens off :root so it always matches
    the surrounding page. Pure — never touches Store.
    ============================================================ */
+// 66mm of printable paper (72mm roll less 3mm margins) at 96dpi. Every print
+// path renders against this so receipts are identical whatever measured them.
+const PRINT_CSS_W = 249;
 function renderConstellation(canvas, nodeIds, theme, opts={}){
   if(!nodeIds || !nodeIds.length) return;
   const print = !!opts.print;
@@ -716,7 +719,17 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
   // Screen: canvas fills the wrap in both dimensions (drawing centers inside).
   let cssW, cssH, k, ox, oy;
   if(print){
-    cssW = r.width;
+    // FIXED reference width, deliberately not the measured parent.
+    // Every printed receipt is the same 72mm roll with 3mm margins = 66mm of
+    // paper, which is 249 CSS px at 96dpi. Measuring instead made the output
+    // depend on *when* the draw happened: browsers disagree about whether
+    // beforeprint fires before or after print styles apply, so on some devices
+    // the element still reported its on-screen width (~800px). Labels were then
+    // sized for 800px and squashed onto 249px of paper — the same path printed
+    // from the kiosk and from the archive came out at different scales.
+    // Sizing against the paper makes both pages produce identical geometry
+    // regardless of layout timing; CSS width:100% maps it onto the real roll.
+    cssW = PRINT_CSS_W;
     k = cssW / worldW;
     cssH = worldH * k;
     ox = -bx0 * k;
