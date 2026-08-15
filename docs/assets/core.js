@@ -703,7 +703,10 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
 
   const pts=nodeIds.map(i=>NODES[i]);
   const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
-  const worldPad = print ? 60 : 90;
+  // Print needs a wider margin than screen: the receipt is only ~66mm across, so
+  // a station name is a big fraction of the width and needs somewhere to sit
+  // without running off the paper.
+  const worldPad = print ? 130 : 90;
   const bx0=Math.min(...xs)-worldPad, bx1=Math.max(...xs)+worldPad,
         by0=Math.min(...ys)-worldPad, by1=Math.max(...ys)+worldPad;
   const worldW = bx1-bx0, worldH = by1-by0;
@@ -765,14 +768,23 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
     //         already-placed rect (dot, number, or previously placed label) plus
     //         off-canvas clipping. This is a print-simplified port of MapView's
     //         labelMetrics greedy placer.
-    const NAME_FS = 10, NUM_FS = 9, DOT_CLEAR = 6, LINE_H = NAME_FS + 3;
+    // Sized as a fraction of the receipt width rather than fixed px. At 72mm
+    // paper the canvas is only ~250px wide, so the old flat 10px made
+    // "VULNERABILITY" span a third of the paper — labels collided and ran off
+    // the edge. ~2.7% of width lands near 7px there, which is still comfortably
+    // legible at 203dpi while leaving the 15pt title clearly dominant.
+    const NAME_FS = Math.max(6, Math.min(9, cssW * 0.027));
+    const NUM_FS  = Math.max(5, NAME_FS - 1.5);
+    const DOT_CLEAR = 5, LINE_H = NAME_FS + 2.5;
 
     // Draw the dots.
+    // Dots scale with the label size so the drawing stays proportional at any
+    // paper width instead of turning into big blobs beside small type.
+    const DOT_END = NAME_FS * 0.58, DOT_MID = NAME_FS * 0.42;
     pts.forEach((n,i)=>{
       const s = toS(n);
       const isEnd = i===0 || i===pts.length-1;
-      const rad = isEnd ? 4.5 : 3.2;
-      ctx.beginPath(); ctx.arc(s.x, s.y, rad, 0, 7);
+      ctx.beginPath(); ctx.arc(s.x, s.y, isEnd ? DOT_END : DOT_MID, 0, 7);
       ctx.fillStyle = isEnd ? "#000" : catColor(n.c, "print");
       ctx.fill();
     });
@@ -788,7 +800,7 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
     });
     const dotRects = pts.map((n,i)=>{
       const s = toS(n);
-      const rad = (i===0||i===pts.length-1) ? 5 : 4;
+      const rad = ((i===0||i===pts.length-1) ? DOT_END : DOT_MID) + 1;
       return {x0: s.x - rad, x1: s.x + rad, y0: s.y - rad, y1: s.y + rad};
     });
 
@@ -840,6 +852,12 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
         const score = -hits*100 - yClipped*30 - ci;
         if(score > bestScore){ bestScore = score; best = r; }
       }
+      // Vertical clamp, mirroring the horizontal one above. If every candidate
+      // would have run past the top or bottom edge the placer still had to pick
+      // one — without this the label was simply printed off the paper, which is
+      // the "sometimes it just gets cut" case.
+      if(best.y0 < 1){ const d = 1 - best.y0; best = {...best, ly: best.ly + d, y0: 1, y1: best.y1 + d}; }
+      if(best.y1 > cssH - 1){ const d = best.y1 - (cssH - 1); best = {...best, ly: best.ly - d, y0: best.y0 - d, y1: cssH - 1}; }
       finalPos[idx] = best;
       placed.push({x0: best.x0, x1: best.x1, y0: best.y0, y1: best.y1});
     }

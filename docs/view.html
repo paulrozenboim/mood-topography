@@ -27,6 +27,7 @@
   .viewer .const img{position:absolute;inset:0;width:100%;height:100%;
     object-fit:contain;display:block}
   .viewer .stops{display:flex;flex-wrap:wrap;gap:6px}
+  .print-qr{display:none}                 /* print only — see @media print */
   .viewer .stops span{display:inline-flex;align-items:center;gap:6px;font-family:'Martian Mono',monospace;
     font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;box-shadow:inset 0 0 0 1px var(--hair)}
   .viewer .stops i{width:7px;height:7px;border-radius:50%}
@@ -62,7 +63,10 @@
     .viewer *{visibility:visible;color:#000!important}
     .viewer .head-actions, .viewer .hint, .qr-veil{display:none!important}
     .viewer header{display:block!important;text-align:center;padding:0!important;margin:0 0 2mm 0!important;border:none!important}
-    .viewer h1{font-size:14pt!important;font-weight:800!important;line-height:1.1!important;margin:0!important}
+    /* Matches the cast receipt's title exactly — same size, weight and case,
+       so a reprint from the archive is indistinguishable from the original. */
+    .viewer h1{font-size:15pt!important;font-weight:800!important;line-height:1.05!important;
+      margin:0!important;text-transform:uppercase!important;letter-spacing:.01em!important}
     .viewer .head-l .eyebrow{display:none!important}
     .viewer .const{box-shadow:none!important;background:#fff!important;
       min-height:0!important;height:auto!important;margin:2mm 0 3mm 0!important;
@@ -71,6 +75,10 @@
       width:100%!important;height:auto!important;inset:auto!important}
     .viewer .const img{display:none!important}
     .viewer .stops{display:none!important}
+    /* QR, matching the cast receipt's 32mm block. */
+    .print-qr{display:block!important;margin:2mm 0!important;text-align:center}
+    .print-qr canvas{display:block!important;width:32mm!important;height:32mm!important;
+      margin:0 auto!important;background:#fff!important}
     .viewer .credits{margin-top:3mm!important;padding-top:2mm!important;
       border-top:1px dashed #000!important;text-align:center;font-family:'Martian Mono',monospace}
     .viewer .credits .row, .viewer .credits .row-link{display:block!important;
@@ -96,6 +104,10 @@
     <canvas id="star" aria-hidden="true"></canvas>
     <img id="starImg" alt="Your constellation">
   </div>
+  <!-- Print-only QR. The cast receipt carries one, so a reprint from the
+       archive has to as well or the two receipts don't match. Hidden on
+       screen, where the QR lives behind the Share button instead. -->
+  <div class="print-qr" id="printQRWrap" aria-hidden="true"><canvas id="printQR"></canvas></div>
   <div class="stops" id="stops"></div>
   <p class="hint" id="hint"><b>Long-press the image to save it.</b> This link stays live — you can come back to it, share it, or open it on another device.</p>
   <div class="credits">
@@ -164,7 +176,11 @@ const query = readQuery();
 if(!ids.length){
   showEmpty("No constellation encoded in this link.");
 } else {
-  title.textContent = "Your path";
+  // Same wording as the cast receipt ("From <anchor>") so a reprint out of the
+  // archive matches the original slip the participant was handed.
+  title.textContent = `From ${NODES[ids[0]].n}`;
+  // Print-only QR pointing back at this very page.
+  renderQR(document.getElementById("printQR"), location.href, 150);
   const paintStops = () => {
     stops.innerHTML = ids.map((id,i)=>{
       const n=NODES[id];

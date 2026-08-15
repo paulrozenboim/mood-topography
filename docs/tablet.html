@@ -7,12 +7,17 @@
 <link rel="stylesheet" href="assets/style.css">
 <style>
   .kiosk-head{position:relative}
-  .undo-row{display:flex;gap:8px;margin-top:14px}
+  .undo-row{display:flex;gap:8px;margin-top:9px}
+  .kiosk-corner{position:absolute;top:var(--pad);right:var(--pad);z-index:8;display:flex;gap:6px}
+  .kiosk-corner .corner-btn{position:relative;top:auto;right:auto}
 </style>
 </head>
 <body>
 <div id="app">
-  <button class="corner-btn tr icon-only" id="themeBtn" type="button" title="Toggle theme" aria-label="Toggle theme"></button>
+  <div class="kiosk-corner">
+    <button class="corner-btn icon-only" id="fullBtn" type="button" title="Fullscreen" aria-label="Enter fullscreen"></button>
+    <button class="corner-btn icon-only" id="themeBtn" type="button" title="Toggle theme" aria-label="Toggle theme"></button>
+  </div>
   <div class="kiosk">
     <div class="kiosk-head">
       <div class="prompt-slot">
@@ -42,6 +47,8 @@
 
 <div class="modal-veil" id="veil">
   <div class="modal">
+    <button class="corner-btn icon-only modal-close" id="mClose" type="button"
+            title="Close" aria-label="Close"></button>
     <div class="print-area" id="printArea">
       <div class="modal-head">
         <h3 id="mHead">Your constellation</h3>
@@ -97,6 +104,26 @@ const themeBtn = document.getElementById("themeBtn");
 themeBtn.innerHTML = Icons.theme;
 themeBtn.onclick = ()=>Store.setTheme(Store.theme==="dark"?"light":"dark");
 document.documentElement.dataset.theme = Store.theme;
+
+// Fullscreen — on an Android tablet this is what removes Chrome's address bar
+// and tab strip, which is the only way to get a true kiosk surface. Must be
+// triggered by a real user gesture, so it lives on a button rather than firing
+// on load. The icon flips to "exit" while active.
+const fullBtn = document.getElementById("fullBtn");
+function syncFullBtn(){
+  const on = !!document.fullscreenElement;
+  fullBtn.innerHTML = on ? Icons.fullscreenExit : Icons.fullscreen;
+  const label = on ? "Exit fullscreen" : "Fullscreen";
+  fullBtn.title = label; fullBtn.setAttribute("aria-label", label);
+}
+fullBtn.onclick = () => {
+  const d = document.documentElement;
+  if(document.fullscreenElement) document.exitFullscreen?.();
+  else (d.requestFullscreen?.({navigationUI:"hide"}) ?? d.webkitRequestFullscreen?.())
+        ?.catch?.(()=>{});
+};
+document.addEventListener("fullscreenchange", syncFullBtn);
+syncFullBtn();
 
 let phase="anchor"; // anchor | draw
 
@@ -207,7 +234,19 @@ const mMeta=document.getElementById("mMeta");
 const mKeepsake=document.getElementById("mKeepsake");
 const mQR=document.getElementById("mQR");
 const mPrintDate=document.getElementById("mPrintDate");
+const mClose=document.getElementById("mClose");
 let lastCastIds=null;                              // captured for onbeforeprint
+
+// Single exit point for the receipt. `cast` tracks whether the path was
+// committed: closing after a cast clears the board for the next participant,
+// closing out of the preview leaves the draft intact so they can keep editing.
+let modalCommitted=false;
+function closeModal(){
+  veil.classList.remove("on");
+  if(modalCommitted){ modalCommitted=false; reset(); }
+}
+mClose.innerHTML=Icons.close;
+mClose.onclick=closeModal;
 
 // The canvas is drawn to whatever CSS size it had at cast time; when the browser
 // switches to print media the constellation-wrap resizes (to 66×55mm for thermal
@@ -250,9 +289,10 @@ function openPreview(){
   mFoot.innerHTML="";
   // No Print here — printing before commit lets people walk away with a receipt
   // that never joined the wall. Print button moves in only after cast, in castNow().
+  modalCommitted=false;                       // preview: closing keeps the draft
   const editBtn=el("button","btn ghost","Keep editing");
   const castBtn=el("button","btn","Cast to the wall");
-  editBtn.onclick=()=>veil.classList.remove("on");
+  editBtn.onclick=closeModal;
   castBtn.onclick=()=>castNow(ns);
   mFoot.append(editBtn, castBtn);
   veil.classList.add("on");
@@ -264,6 +304,7 @@ function castNow(ns){
   const p={id:uid(), t:Date.now(), nodes:ns};
   Store.addPath(p);
   lastCastIds = ns.slice();
+  modalCommitted = true;                      // cast: closing resets for the next person
   const anchorName = NODES[ns[0]].n;
   mHead.textContent = `From ${anchorName}`;      // matches view.html's title format
   mSub.textContent = `${ns.length} stations, in order. This joins the wall.`;
@@ -285,11 +326,11 @@ function castNow(ns){
   const printBtn=el("button","btn ghost",`${Icons.print}<span>Print</span>`);
   printBtn.onclick=()=>window.print();
   const doneBtn=el("button","btn","Done");
-  doneBtn.onclick=()=>{ veil.classList.remove("on"); reset() };
+  doneBtn.onclick=closeModal;
   mFoot.append(printBtn, doneBtn);
-  // long fallback in case someone walks off without tapping Done
-  clearTimeout(castNow._t);
-  castNow._t=setTimeout(()=>{ veil.classList.remove("on"); reset() }, 45000);
+  // No auto-dismiss timer. Printing can take a while on a Bluetooth thermal
+  // printer and the receipt vanishing mid-job was worse than a modal that
+  // waits — the X and Done are the only ways out.
 }
 
 window.addEventListener("resize",()=>{ if(veil.classList.contains("on")) drawConstellation(view.draft.nodes) });

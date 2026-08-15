@@ -142,26 +142,42 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 /* Header is centered above the map so the prompt and instructions catch the eye
    the moment someone steps up. Old layout had them left-aligned in a narrow
    column — participants were reading the map and never noticing the ask. */
-.kiosk-head{padding:var(--pad) var(--pad) 10px;text-align:center}
+.kiosk-head{padding:14px var(--pad) 8px;text-align:center;flex:0 0 auto}
 /* Both phase variants of the prompt/instructions render stacked in the same grid cell.
    The cell sizes itself to the TALLER of the two, permanently — so switching between them
    never changes the header's height, which would otherwise resize the canvas beneath it
    and visibly shift every station on screen the moment a phase changes. */
 .prompt-slot, .instructions-slot{display:grid}
 .prompt-slot > *, .instructions-slot > *{grid-area:1/1}
-.prompt{font-size:clamp(20px,2.8vw,32px);font-weight:800;font-variation-settings:'wdth' 116;
+/* The kiosk header is deliberately restrained: every pixel it takes is a pixel
+   the station map loses, and the map is the thing people actually touch. Sizes
+   are clamped against viewport HEIGHT as well as width so a short landscape
+   tablet gets a compact header without needing its own breakpoint. */
+.prompt{font-size:clamp(17px,min(2.1vw,3.4vh),26px);font-weight:800;font-variation-settings:'wdth' 116;
   letter-spacing:-.01em;line-height:1.1}
 .prompt em{font-style:normal;color:var(--ink-3)}
-.instructions{margin:12px auto 0;font-family:'Martian Mono',monospace;font-size:13px;letter-spacing:.03em;
-  color:var(--ink-2);line-height:1.6;max-width:62ch}
+.instructions{margin:7px auto 0;font-family:'Martian Mono',monospace;
+  font-size:clamp(10px,min(1.05vw,1.6vh),12.5px);letter-spacing:.03em;
+  color:var(--ink-2);line-height:1.5;max-width:70ch}
 .instructions b{color:var(--ink);font-weight:600}
 .phase-hidden{visibility:hidden}
-.progress-track{display:flex;gap:4px;margin-top:16px}
+.progress-track{display:flex;gap:4px;margin-top:10px}
 .progress-track i{flex:1;height:3px;background:var(--hair);display:block}
 .progress-track i.on{background:var(--ink)}
 .undo-row{justify-content:center}
-.kiosk-foot{padding:12px var(--pad) var(--pad);display:flex;gap:10px;align-items:center;
-  border-top:var(--rail) solid var(--hair)}
+.kiosk-foot{padding:9px var(--pad);display:flex;gap:10px;align-items:center;
+  border-top:var(--rail) solid var(--hair);flex:0 0 auto}
+/* Short landscape screens (the Android kiosk tablet): squeeze the chrome
+   further so the map gets essentially the whole viewport. */
+@media (orientation:landscape) and (max-height:820px){
+  .kiosk-head{padding:9px var(--pad) 5px}
+  .instructions{margin-top:5px}
+  .progress-track{margin-top:7px}
+  .kiosk-head .undo-row{margin-top:7px!important}
+  .kiosk-foot{padding:7px var(--pad)}
+  .btn{padding:10px 18px}
+  .btn.small{padding:7px 12px}
+}
 .route-strip{flex:1;min-width:0;display:flex;align-items:center;gap:6px;overflow:hidden;
   font-family:'Martian Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
   color:var(--ink-2);white-space:nowrap}
@@ -187,7 +203,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
    the foot with the buttons stays pinned at the bottom so the participant
    can always reach Print/Done without hunting. dvh is used to handle mobile
    Safari's URL bar collapsing correctly — vh includes it, dvh doesn't. */
-.modal{width:min(560px,94vw);
+.modal{width:min(560px,94vw);position:relative;
   max-height:calc(100vh - 40px);
   max-height:calc(100dvh - 40px);
   display:flex;flex-direction:column;
@@ -197,7 +213,14 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .print-area{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch}
 .modal-foot{flex:0 0 auto;border-top:1px solid var(--hair)}
-.modal-head{padding:20px 22px 0}
+/* Close affordance for the cast receipt — the modal no longer times out, so a
+   deliberate dismiss control is the only way back to the kiosk. Sized for a
+   fingertip, not a mouse pointer. */
+.modal-close{position:absolute;top:10px;right:10px;z-index:4;width:40px;height:40px;
+  display:inline-flex;align-items:center;justify-content:center;background:none;
+  color:var(--ink-3);box-shadow:inset 0 0 0 1px var(--hair)}
+.modal-close:hover, .modal-close:active{color:var(--ink)}
+.modal-head{padding:20px 56px 0 22px}
 .modal-head h3{font-size:20px;font-weight:800;font-variation-settings:'wdth' 118;text-transform:uppercase;line-height:1.15}
 .modal-head p{margin-top:6px;font-family:'Martian Mono',monospace;font-size:10.5px;color:var(--ink-2);letter-spacing:.04em}
 .constellation-wrap{position:relative;margin:16px 22px;height:min(46vh,340px);background:#05060700 ;
@@ -212,7 +235,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 }
 @media (orientation: landscape) and (max-height: 720px){
   .constellation-wrap{height:min(34vh,220px)}
-  .modal-head{padding:14px 22px 0}
+  /* Right padding must stay clear of the close button, which sits in the
+     same corner — hence 56px here too, not the flat 22px. */
+  .modal-head{padding:14px 56px 0 22px}
   .modal-head h3{font-size:17px}
   .keepsake{padding:10px}
   .keepsake canvas{width:100px!important;height:100px!important}
@@ -294,9 +319,14 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   /* Header — title only. Subtitle ("N stations, in order…") hidden for the
      minimal receipt the user asked for. */
   .modal-head{padding:0!important;text-align:center}
-  .modal-head h3{font-size:14pt;margin:0 0 2mm 0;line-height:1.1;letter-spacing:-.01em;
-    font-weight:800}
+  /* Clearly dominant over the station labels inside the drawing (~5pt). At the
+     old 14pt against 7.5pt labels the two read as the same level and the
+     receipt had no visible hierarchy. */
+  .modal-head h3{font-size:15pt;margin:0 0 2.5mm 0;line-height:1.05;letter-spacing:.01em;
+    font-weight:800;text-transform:uppercase}
   .modal-head p{display:none!important}
+  /* The close affordance is screen-only. */
+  .modal-close{display:none!important}
 
   /* Constellation — no fixed height. renderConstellation in print mode sizes
      the canvas bitmap so its aspect ratio matches the drawing (via inline

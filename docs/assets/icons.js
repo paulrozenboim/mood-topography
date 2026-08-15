@@ -76,6 +76,26 @@ const Icons = {
       '<path d="M4 4 L 16 16" stroke-width="2"/>' +
     '</svg>',
 
+  // Arrows pushing outward / inward — enter and leave fullscreen. On an Android
+  // tablet kiosk this is what gets rid of the address and tab bars.
+  fullscreen:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M3 7.5 V3 H7.5"/><path d="M12.5 3 H17 V7.5"/>' +
+      '<path d="M17 12.5 V17 H12.5"/><path d="M7.5 17 H3 V12.5"/>' +
+    '</svg>',
+
+  fullscreenExit:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M7.5 3 V7.5 H3"/><path d="M17 7.5 H12.5 V3"/>' +
+      '<path d="M12.5 17 V12.5 H17"/><path d="M3 12.5 H7.5 V17"/>' +
+    '</svg>',
+
+  // Plain X — dismisses the cast receipt.
+  close:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">' +
+      '<path d="M5 5 L15 15"/><path d="M15 5 L5 15"/>' +
+    '</svg>',
+
   // Video-camera silhouette — reads as "cinematic" / first-person flythrough.
   cinema:
     '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">' +
