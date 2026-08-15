@@ -709,7 +709,7 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
   // Print needs a wider margin than screen: the receipt is only ~66mm across, so
   // a station name is a big fraction of the width and needs somewhere to sit
   // without running off the paper.
-  const worldPad = print ? 130 : 90;
+  const worldPad = print ? 165 : 90;
   const bx0=Math.min(...xs)-worldPad, bx1=Math.max(...xs)+worldPad,
         by0=Math.min(...ys)-worldPad, by1=Math.max(...ys)+worldPad;
   const worldW = bx1-bx0, worldH = by1-by0;
@@ -786,8 +786,12 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
     // "VULNERABILITY" span a third of the paper — labels collided and ran off
     // the edge. ~2.7% of width lands near 7px there, which is still comfortably
     // legible at 203dpi while leaving the 15pt title clearly dominant.
-    const NAME_FS = Math.max(6, Math.min(9, cssW * 0.027));
-    const NUM_FS  = Math.max(5, NAME_FS - 1.5);
+    // Midway between the two extremes we tried on paper: the original flat 10px
+    // was legible but collided constantly, and 6.7px cleared the collisions at
+    // the cost of readability. ~8.5px at 66mm keeps names comfortably readable
+    // while leaving the placer enough room to resolve overlaps.
+    const NAME_FS = Math.max(6.5, Math.min(10, cssW * 0.034));
+    const NUM_FS  = Math.max(5, NAME_FS - 2.5);
     const DOT_CLEAR = 5, LINE_H = NAME_FS + 2.5;
 
     // Draw the dots.
@@ -831,6 +835,12 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
       {dx: 0,          dy: -DOT_CLEAR - NUM_FS - LINE_H, al:"center"},   // above (over the number)
       {dx:  DOT_CLEAR, dy: -NAME_FS/2 + 1,               al:"left"  },   // right of the dot
       {dx: -DOT_CLEAR, dy: -NAME_FS/2 + 1,               al:"right" },   // left of the dot
+      // Diagonals — the four cardinal slots alone leave crowded clusters with
+      // nowhere to go, which is where the collisions on the receipt came from.
+      {dx:  DOT_CLEAR, dy:  DOT_CLEAR + 1,               al:"left"  },   // lower right
+      {dx: -DOT_CLEAR, dy:  DOT_CLEAR + 1,               al:"right" },   // lower left
+      {dx:  DOT_CLEAR, dy: -DOT_CLEAR - NAME_FS,         al:"left"  },   // upper right
+      {dx: -DOT_CLEAR, dy: -DOT_CLEAR - NAME_FS,         al:"right" },   // upper left
       {dx: 0,          dy:  DOT_CLEAR + 2 + LINE_H,      al:"center"},   // 2 lines below
       {dx: 0,          dy: -DOT_CLEAR - NUM_FS - LINE_H*2, al:"center"}, // 2 lines above
     ];
@@ -844,6 +854,13 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
     };
 
     const placed = [...dotRects, ...numRects];
+    // Sampled points along the drawn curve. The placer previously only knew
+    // about dots, numbers and other labels, so names happily landed straight on
+    // top of the path itself (RESILIENCE sitting on the line). These carry a
+    // softer penalty than a hard collision — crossing the line is ugly but
+    // acceptable when there is genuinely nowhere else to go.
+    const pathPts = [];
+    for(let i=0; i<sp.length; i+=2) pathPts.push(sp[i]);
     const finalPos = new Array(labels.length);
 
     // Greedy: place hardest labels first (widest) so short labels can slot around them.
@@ -861,8 +878,14 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
         for(const p of placed){
           if(r.x0 < p.x1 && p.x0 < r.x1 && r.y0 < p.y1 && p.y0 < r.y1) hits++;
         }
+        let onPath = 0;
+        for(const q of pathPts){
+          if(q.x > r.x0 && q.x < r.x1 && q.y > r.y0 && q.y < r.y1) onPath++;
+        }
         const yClipped = (r.y0 < 0 || r.y1 > cssH) ? 1 : 0;
-        const score = -hits*100 - yClipped*30 - ci;
+        // Hard collisions dominate; sitting on the curve is a tiebreaker that
+        // pushes labels off the line whenever a clear slot exists.
+        const score = -hits*100 - Math.min(onPath, 8)*6 - yClipped*30 - ci;
         if(score > bestScore){ bestScore = score; best = r; }
       }
       // Vertical clamp, mirroring the horizontal one above. If every candidate
@@ -1008,7 +1031,19 @@ class MapView{
   enableNavigation(){
     const cv=this.cv, at=ev=>{const r=cv.getBoundingClientRect(); return {x:ev.clientX-r.left,y:ev.clientY-r.top}};
     cv.style.cursor="grab";
-    cv.addEventListener("wheel",ev=>{ ev.preventDefault(); this.zoomAt(at(ev), ev.deltaY<0?1.12:1/1.12) },{passive:false});
+    // Zoom scales with how far the wheel actually moved, rather than applying a
+    // flat step per event. A mouse notch sends one event with |deltaY|~100, but a
+    // Mac trackpad sends a rapid stream of small deltas — the old fixed 1.12 per
+    // event compounded those into huge jumps and made fine positioning
+    // impossible. deltaMode is normalised first (0=px, 1=line, 2=page) since
+    // some mice report lines, then the exponential keeps zoom-in and zoom-out
+    // exactly symmetric.
+    cv.addEventListener("wheel",ev=>{
+      ev.preventDefault();
+      const unit = ev.deltaMode===1 ? 16 : ev.deltaMode===2 ? 400 : 1;
+      const dy = Math.max(-240, Math.min(240, ev.deltaY*unit));   // clamp flings
+      this.zoomAt(at(ev), Math.exp(-dy*0.0012));
+    },{passive:false});
     let drag=null;
     cv.addEventListener("pointerdown",ev=>{ drag={x:ev.clientX,y:ev.clientY}; cv.setPointerCapture(ev.pointerId); cv.style.cursor="grabbing" });
     cv.addEventListener("pointermove",ev=>{

@@ -60,13 +60,32 @@ const stats=document.getElementById("stats");
 let paused = false, bulletinHidden = false;
 
 initQuickNav({current:"projection", actions:[
-  {html: Icons.fit,   title:"Fit view",          onClick:()=>view.resetView()},
-  {html: Icons.prev,  title:"Previous bulletin", onClick:()=>prevBulletin()},
-  {html: Icons.pause, title:"Pause bulletin",    onClick:()=>togglePause()},
-  {html: Icons.next,  title:"Next bulletin",     onClick:()=>nextBulletin()},
-  {html: Icons.eyeOn, title:"Hide bulletin",     onClick:()=>toggleBulletinVisibility()},
-  {html: Icons.theme, title:"Toggle theme",      onClick:()=>Store.setTheme(Store.theme==="dark"?"light":"dark")}
+  {html: Icons.fit,        title:"Fit view",          onClick:()=>view.resetView()},
+  {html: Icons.prev,       title:"Previous bulletin", onClick:()=>prevBulletin()},
+  {html: Icons.pause,      title:"Pause bulletin",    onClick:()=>togglePause()},
+  {html: Icons.next,       title:"Next bulletin",     onClick:()=>nextBulletin()},
+  {html: Icons.eyeOn,      title:"Hide bulletin",     onClick:()=>toggleBulletinVisibility()},
+  {html: Icons.fullscreen, title:"Fullscreen",        onClick:()=>toggleFullscreen()},
+  {html: Icons.theme,      title:"Toggle theme",      onClick:()=>Store.setTheme(Store.theme==="dark"?"light":"dark")}
 ]});
+
+// Fullscreen — clears the browser chrome off the projected image. Same control
+// as the kiosk, but it lives in the quick-nav here so nothing floats over the
+// wall while the show is running. Also still bound to the `f` key below.
+const fullscreenBtn = document.querySelector('.quicknav [aria-label="Fullscreen"]');
+function toggleFullscreen(){
+  const d = document.documentElement;
+  if(document.fullscreenElement) document.exitFullscreen?.();
+  else (d.requestFullscreen?.({navigationUI:"hide"}) ?? d.webkitRequestFullscreen?.())?.catch?.(()=>{});
+}
+function syncFullscreenBtn(){
+  if(!fullscreenBtn) return;
+  const on = !!document.fullscreenElement;
+  fullscreenBtn.innerHTML = on ? Icons.fullscreenExit : Icons.fullscreen;
+  const label = on ? "Exit fullscreen" : "Fullscreen";
+  fullscreenBtn.title = label; fullscreenBtn.setAttribute("aria-label", label);
+}
+document.addEventListener("fullscreenchange", syncFullscreenBtn);
 
 // Grab refs to the transport / visibility buttons so we can swap their icons
 // when their state flips. Located via aria-label (set by initQuickNav from the
@@ -231,7 +250,7 @@ Store.sub(evt=>{
 document.addEventListener("keydown",e=>{
   if(e.key==="t")Store.setTheme("projection",Store.theme==="dark"?"light":"dark");
   if(e.key==="r")view.resetView();
-  if(e.key==="f"){ const d=document.documentElement; document.fullscreenElement?document.exitFullscreen():d.requestFullscreen&&d.requestFullscreen() }
+  if(e.key==="f") toggleFullscreen();
   if(e.key==="p"||e.key==="P") screenshotFullPage();
 });
 

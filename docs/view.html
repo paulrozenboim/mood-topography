@@ -160,12 +160,16 @@ themeBtn.innerHTML = Icons.theme;
 qrBtn.innerHTML    = Icons.qr;
 printBtn.innerHTML = Icons.print;
 
-// Theme mirrors the unified operator theme (Store.theme). On phones connected
-// to the same Firebase / local relay, that means the participant's page follows
-// whatever the operator has active on the wall. Tapping the toggle here fires
-// Store.setTheme, which propagates back — one theme, all surfaces.
-document.documentElement.dataset.theme = Store.theme;
-Store.sub(()=>{ document.documentElement.dataset.theme = Store.theme });
+// Theme here is PURELY LOCAL to this page and this device.
+// The keepsake link is opened by participants on their own phones; wiring its
+// toggle to Store.setTheme meant one visitor flipping to dark repainted the
+// projection wall, the kiosk and every other open keepsake. It now seeds from
+// the operator's theme on first visit, then lives in localStorage on the
+// viewer's own device and never propagates anywhere.
+const VIEW_THEME_KEY = "topo.view.theme";
+let viewTheme = localStorage.getItem(VIEW_THEME_KEY) || Store.theme || "dark";
+function applyViewTheme(){ document.documentElement.dataset.theme = viewTheme }
+applyViewTheme();
 
 function readHash(){
   const h = location.hash.replace(/^#/, "");
@@ -194,7 +198,7 @@ if(!ids.length){
   const paintStops = () => {
     stops.innerHTML = ids.map((id,i)=>{
       const n=NODES[id];
-      return `<span><i style="background:${catColor(n.c,Store.theme)}"></i>${i+1}. ${n.n}</span>`;
+      return `<span><i style="background:${catColor(n.c,viewTheme)}"></i>${i+1}. ${n.n}</span>`;
     }).join("");
   };
   paintStops();
@@ -213,10 +217,10 @@ if(!ids.length){
   // participant's camera roll.
   const starImg = document.getElementById("starImg");
   const drawScreen = () => {
-    renderConstellation(star, ids, Store.theme);
+    renderConstellation(star, ids, viewTheme);
     try{ starImg.src = star.toDataURL("image/png") }catch(_){}
   };
-  const drawPrint = () => renderConstellation(star, ids, Store.theme, {print:true});
+  const drawPrint = () => renderConstellation(star, ids, viewTheme, {print:true});
   requestAnimationFrame(drawScreen);
 
   // Re-export on resize so the saved image matches whatever the viewer is looking at.
@@ -226,10 +230,12 @@ if(!ids.length){
     resizeT = setTimeout(()=>requestAnimationFrame(drawScreen), 120);
   });
 
-  // Theme toggle drives the unified Store.theme — the operator's page updates
-  // via Sync too. The Store.sub above then re-triggers our repaint locally.
+  // Local-only toggle: persists to this device, repaints this page, and is
+  // deliberately not broadcast to the wall or the kiosk.
   themeBtn.onclick = () => {
-    Store.setTheme(Store.theme === "dark" ? "light" : "dark");
+    viewTheme = viewTheme === "dark" ? "light" : "dark";
+    localStorage.setItem(VIEW_THEME_KEY, viewTheme);
+    applyViewTheme();
     paintStops();
     requestAnimationFrame(drawScreen);
   };

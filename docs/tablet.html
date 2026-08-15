@@ -16,7 +16,6 @@
 <div id="app">
   <div class="kiosk-corner">
     <button class="corner-btn icon-only" id="fullBtn" type="button" title="Fullscreen" aria-label="Enter fullscreen"></button>
-    <button class="corner-btn icon-only" id="themeBtn" type="button" title="Toggle theme" aria-label="Toggle theme"></button>
   </div>
   <div class="kiosk">
     <div class="kiosk-head">
@@ -98,11 +97,10 @@ const redoBtn=document.getElementById("redoBtn");
 const toast=document.getElementById("toast");
 
 // Tablet has no shared nav on purpose — a participant shouldn't be able to reach
-// Settings, Projection, or Home from the kiosk mid-show. Only the theme button
-// stays, top-right, so operators can flip dark/light without touching the router.
-const themeBtn = document.getElementById("themeBtn");
-themeBtn.innerHTML = Icons.theme;
-themeBtn.onclick = ()=>Store.setTheme(Store.theme==="dark"?"light":"dark");
+// Settings, Projection, or Home from the kiosk mid-show. The theme toggle is gone
+// for the same reason: the public shouldn't be able to flip the kiosk's appearance.
+// The page still FOLLOWS Store.theme, so the operator sets it from Settings and
+// the kiosk updates over sync like every other surface.
 document.documentElement.dataset.theme = Store.theme;
 
 // Fullscreen — on an Android tablet this is what removes Chrome's address bar
