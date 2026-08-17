@@ -70,6 +70,12 @@ deliberately not derived from `location`: the kiosk usually runs off a LAN addre
 QR encoding `192.168.x.x` is dead paper the moment someone leaves the room. Check it
 before a print run — it is the one thing here that cannot be fixed after the fact.
 
+The kiosk guards the other half of that problem itself. A tablet stays open for hours; deploy
+a change — or rename the repo — while it sits there and the tab keeps printing the address it
+loaded this morning. When `tablet.html` is served over https from anywhere that isn't
+underneath `PUBLIC_BASE`, it puts a red band across the top telling the operator to reload
+before printing. Local http is exempt, since the relay is *supposed* to be on a LAN address.
+
 The code is the same base36 the URL hash uses, upper-cased behind an `MT-` prefix. The
 prefix is load-bearing rather than decorative: the alphabet overlaps station names
 exactly, so a bare `hope` is both a station to search for and a valid four-stop path
@@ -141,8 +147,16 @@ The search box takes three shapes, decided by what's typed — no mode to set fi
 - **A keepsake link** — pasted whole. Still works for links handed out earlier.
 
 A line under the box states in plain English what the current query means. Everything —
-query, mode, line filter, length, sort, selected station — lives in the URL hash, so any
+query, mode, mood category, length, sort, selected station — lives in the URL hash, so any
 view is itself shareable.
+
+**Mood categories** are a dropdown rather than four chips, with a second dropdown for the
+part the category played — the same five readings a station gets. On its own, "touches
+Momentum & Vision" is not a filter: nearly two thirds of paths touch all four categories
+and by the end of a night that reading is usually 100%. What it is asking is *where* a
+category sat: started in Friction, ended in Momentum, only ever passed through Connection,
+never reached at all. Those separate the paths; the plain membership does not, which is why
+it is one control with a role attached rather than four buttons on their own.
 
 ### Where it gets its data
 
@@ -270,5 +284,5 @@ dynamically only when cloud mode is active).
 ## Station layout
 
 `docs/assets/core.js` embeds pre-solved coordinates for all 36 stations. Each of the
-four mood families gets its own region of the field; a minimum clearance between
+four mood categories gets its own region of the field; a minimum clearance between
 name plates is enforced so labels don't collide from phone up to 1440p projector.

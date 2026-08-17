@@ -45,6 +45,7 @@ const S = {
   pos: "any",        // where a text-matched station sat: any | start | mid | end
   order: "ordered",  // how a chained route is matched: ordered | any | exact
   neverMode: "any",  // which role the "never used" list reports on
+  famPos: "any",     // the part the chosen mood category played in the journey
   shown: PAGE_SIZE,
   results: []
 };
@@ -205,13 +206,13 @@ function fmtSpanOf(paths) {
   return a === b ? a : `${a} – ${b}`;
 }
 
-/* Bulletin copy arrives with {Station} / {Family} braces; resolve each to its
-   line colour, exactly as the projection does.
+/* Bulletin copy arrives with {Station} / {Category} braces; resolve each to
+   its mood-category colour, exactly as the projection does.
    ---
-   Split before escaping, not after: the family names contain an ampersand
-   ("Momentum & Vision"), so escaping the whole line first turns the brace
+   Split before escaping, not after: the category names contain an ampersand
+   ("Momentum & Vision"), so escaping the whole string first turns the brace
    contents into "Momentum &amp; Vision" and the name lookup silently misses —
-   which is how every family name lost its colour. */
+   which is how every category name lost its colour. */
 function bulletinHTML(line) {
   return String(line).split(/(\{[^}]+\})/).map(part => {
     const m = part.match(/^\{([^}]+)\}$/);
@@ -920,7 +921,7 @@ function renderCharts() {
     </button>`;
   }).join("");
 
-  // --- where journeys ended, by mood family
+  // --- where journeys ended, by mood category
   const endTotal = CAT_ORDER.reduce((s, c) => s + (A.catEnd[c] || 0), 0) || 1;
   $("endsBar").innerHTML = CAT_ORDER.map(c => {
     const pct = (A.catEnd[c] || 0) / endTotal * 100;
@@ -937,8 +938,8 @@ function renderCharts() {
   const links = A.edgeList.slice(0, 10);
   const maxV = links.length ? links[0].v : 1;
   $("links").innerHTML = links.length
-    // A segment belongs to two lines at once, so the bar runs the same
-    // colour-to-colour gradient the map draws the route in.
+    // A segment belongs to two mood categories at once, so the bar runs the
+    // same colour-to-colour gradient the map draws the route in.
     ? links.map(e => {
       const ca = catColor(NODES[e.a].c, S.theme), cb = catColor(NODES[e.b].c, S.theme);
       return `<div class="rs-row static">
@@ -1026,7 +1027,7 @@ function resolveStation(term) {
    reader has to set first:
      code  — a pasted keepsake link
      route — two or more stations chained with a separator
-     text  — everything else, matched against station and mood-family names */
+     text  — everything else, matched against station and mood-category names */
 function parseQuery(raw) {
   const q = (raw || "").trim();
   if (!q) return { kind: "none" };
@@ -1104,7 +1105,9 @@ function applyFilters() {
     // A station picked off the map or the traffic list is a subject too, so the
     // role filter applies to it exactly as it does to a typed one.
     if (S.station != null && !roleMatch(p.nodes, id => id === S.station, S.pos)) return false;
-    if (S.fam !== "all" && !p.nodes.some(i => NODES[i].c === S.fam)) return false;
+    // "Touches this category" barely narrows anything (63% of journeys touch
+    // all four), so the category carries a role exactly as a station does.
+    if (S.fam !== "all" && !roleMatch(p.nodes, id => NODES[id].c === S.fam, S.famPos)) return false;
     if (S.len === "short" && p.nodes.length > 4) return false;
     if (S.len === "mid" && (p.nodes.length < 5 || p.nodes.length > 7)) return false;
     if (S.len === "long" && p.nodes.length < 8) return false;
@@ -1159,6 +1162,8 @@ const POS_MODES = [
 ];
 /* Phrasing for the toast and the map read-out, so a filtered count never
    describes itself as "journeys through X" when X was excluded. */
+const POS_LABEL = { any:"anywhere", start:"as a starting point", end:"as a destination",
+                    mid:"as a connection", none:"not used" };
 const POS_PHRASE = {
   any: "through", start: "starting at", end: "ending at",
   mid: "passing through", none: "that never reach"
@@ -1263,7 +1268,8 @@ function renderBrowser() {
 
   const active = [];
   if (S.station != null) active.push({ k: "station", label: NODES[S.station].n });
-  if (S.fam !== "all") active.push({ k: "fam", label: CATS[S.fam].name });
+  if (S.fam !== "all") active.push({ k: "fam",
+    label: CATS[S.fam].name + (S.famPos === "any" ? "" : " — " + POS_LABEL[S.famPos]) });
   if (S.len !== "all") active.push({ k: "len", label: LEN_LABELS[S.len] });
   if (S.q.trim()) active.push({ k: "q", label: `“${S.q.trim()}”` });
   $("activeFilters").innerHTML = active.map(a =>
@@ -1316,7 +1322,7 @@ function renderBrowser() {
 
 const LEN_LABELS = {
   all: "Any length", short: "3–4 stations", mid: "5–7 stations", long: "8–10 stations",
-  fourline: "Crosses all four lines", unique: "Route nobody repeated"
+  fourline: "Crosses all four mood categories", unique: "Route nobody repeated"
 };
 
 /* ---------------- journey lightbox ---------------- */
@@ -1333,7 +1339,7 @@ function openJourney(id) {
   }).join("");
   $("jFacts").innerHTML = [
     `${p.nodes.length} stations`,
-    `${new Set(p.nodes.map(i => NODES[i].c)).size} of 4 lines`,
+    `${new Set(p.nodes.map(i => NODES[i].c)).size} of 4 mood categories`,
     twins ? `${twins} other${twins === 1 ? "" : "s"} traced this exact route` : "Route traced by this person alone"
   ].map(t => `<span>${esc(t)}</span>`).join("")
     // The code that was on the receipt, so someone can check they have the
@@ -1365,6 +1371,7 @@ function syncURL() {
   if (S.pos !== "any" && (kind === "text" || S.station != null)) parts.push("pos=" + S.pos);
   if (S.order !== "ordered" && kind === "route") parts.push("order=" + S.order);
   if (S.fam !== "all") parts.push("fam=" + S.fam);
+  if (S.famPos !== "any" && S.fam !== "all") parts.push("fampos=" + S.famPos);
   if (S.len !== "all") parts.push("len=" + S.len);
   if (S.sort !== "new") parts.push("sort=" + S.sort);
   if (S.station != null) parts.push("at=" + S.station);
@@ -1376,6 +1383,7 @@ function readURL() {
   S.pos = POS_MODES.some(m => m[0] === h.get("pos")) ? h.get("pos") : "any";
   S.order = ORDER_MODES.some(m => m[0] === h.get("order")) ? h.get("order") : "ordered";
   S.fam = h.get("fam") || "all";
+  S.famPos = POS_MODES.some(m => m[0] === h.get("fampos")) ? h.get("fampos") : "any";
   S.len = h.get("len") || "all";
   S.sort = h.get("sort") || "new";
   const at = h.get("at");
@@ -1465,10 +1473,15 @@ function wire() {
   });
 
   // family + length chips
-  $("famChips").addEventListener("click", ev => {
-    const b = ev.target.closest("[data-fam]"); if (!b) return;
-    S.fam = b.dataset.fam; S.shown = PAGE_SIZE;
+  $("famSelect").addEventListener("change", ev => {
+    S.fam = ev.target.value;
+    if (S.fam === "all") S.famPos = "any";      // no subject, no role
+    S.shown = PAGE_SIZE;
     paintControls(); renderBrowser(); syncURL();
+  });
+  $("famPos").addEventListener("change", ev => {
+    S.famPos = ev.target.value; S.shown = PAGE_SIZE;
+    renderBrowser(); syncURL();
   });
   $("lenSelect").addEventListener("change", ev => {
     S.len = ev.target.value; S.shown = PAGE_SIZE; renderBrowser(); syncURL();
@@ -1481,9 +1494,9 @@ function wire() {
   $("activeFilters").addEventListener("click", ev => {
     const b = ev.target.closest("[data-drop]"); if (!b) return;
     const k = b.dataset.drop;
-    if (k === "all") { S.q = ""; S.fam = "all"; S.len = "all"; S.station = null; S.pos = "any"; S.order = "ordered"; search.value = ""; }
+    if (k === "all") { S.q = ""; S.fam = "all"; S.famPos = "any"; S.len = "all"; S.station = null; S.pos = "any"; S.order = "ordered"; search.value = ""; }
     if (k === "q") { S.q = ""; S.pos = "any"; S.order = "ordered"; search.value = ""; }
-    if (k === "fam") S.fam = "all";
+    if (k === "fam") { S.fam = "all"; S.famPos = "any"; }
     if (k === "len") S.len = "all";
     if (k === "station") S.station = null;
     S.shown = PAGE_SIZE;
@@ -1600,10 +1613,13 @@ function openShare() {
 function closeShare() { $("shareVeil").classList.remove("on"); }
 
 function paintControls() {
-  $("famChips").innerHTML = [["all", "All lines"], ...CAT_ORDER.map(c => [c, CATS[c].name])]
-    .map(([v, label]) => `<button type="button" class="rs-chip${S.fam === v ? " on" : ""}" data-fam="${v}"
-      ${v !== "all" ? `style="--dot:${catColor(v, S.theme)}"` : ""}>
-      ${v !== "all" ? `<i></i>` : ""}${esc(label)}</button>`).join("");
+  $("famSelect").innerHTML = [["all", "All mood categories"], ...CAT_ORDER.map(c => [c, CATS[c].name])]
+    .map(([v, label]) => `<option value="${v}">${esc(label)}</option>`).join("");
+  $("famSelect").value = S.fam;
+  $("famPosWrap").hidden = S.fam === "all";
+  $("famPos").innerHTML = POS_MODES.map(([v, label]) =>
+    `<option value="${v}">${esc(label)}</option>`).join("");
+  $("famPos").value = POS_MODES.some(m => m[0] === S.famPos) ? S.famPos : "any";
   $("lenSelect").value = S.len;
   $("sortSelect").value = S.sort;
   $("search").value = S.q;

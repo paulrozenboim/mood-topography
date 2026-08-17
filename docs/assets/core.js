@@ -21,7 +21,7 @@ const catColor = (c,theme)=>
   theme==="light" ? CATS_LIGHT[c] :
   CATS[c].color;
 
-// Solved by relax2.js: each of the four lines fills its own region of the field with a
+// Solved by relax2.js: each of the four mood categories fills its own region with a
 // real gutter between quadrants, semantic bridges pull related stations toward each other,
 // and every station keeps a minimum ~155px of clear space from every other. Re-run the
 // solver rather than hand-editing coordinates if stations are ever added or renamed.
@@ -113,6 +113,20 @@ function parsePathCode(str){
 // The address a receipt points at: the results page with this path already found.
 function resultsURLFor(nodeIds){
   return PUBLIC_BASE + "results.html#q=" + encodeURIComponent(pathCode(nodeIds));
+}
+
+/* Is the address we are about to PRINT stale?
+   A kiosk stays open for hours. Deploy a change — or rename the repo — while
+   it sits there and the tab keeps running the JavaScript it loaded this
+   morning, including the old PUBLIC_BASE. Every receipt printed after that
+   carries a QR to an address that no longer exists, and paper cannot be
+   patched. If we are being served from the public site, our own URL must sit
+   underneath PUBLIC_BASE; when it doesn't, this page is out of date.
+   Skipped on http (the local relay is deliberately on a LAN address that has
+   nothing to do with the public URL). */
+function printAddressLooksStale(){
+  if(location.protocol !== "https:") return false;
+  return !location.href.startsWith(PUBLIC_BASE);
 }
 
 // Cast timestamp piggybacks on the URL so view.html can show WHEN the path was cast,
@@ -254,7 +268,7 @@ function _analyse(paths){
   for(const p of paths){ if(p.nodes.length) endStationSet.add(p.nodes[p.nodes.length-1]) }
   const endCount = endStationSet.size;
 
-  // Loop-shaped paths — anchor and end in the same mood family.
+  // Loop-shaped paths — anchor and end in the same mood category.
   const loopIds = [];
   for(const p of paths){
     if(!p.nodes.length) continue;
@@ -588,7 +602,7 @@ function castBulletin(newPath, allPaths){
       focus:{type:"path", id:newPath.id, motion:"traverse"}, hold:true};
   }
 
-  // 3. All four lines in one path — always worth flagging
+  // 3. All four mood categories in one path — always worth flagging
   const cats = new Set(newPath.nodes.map(i => NODES[i].c));
   if(cats.size === 4){
     const priorFour = others.filter(p =>

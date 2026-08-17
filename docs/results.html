@@ -13,7 +13,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0A0B0D">
-<link rel="stylesheet" href="assets/style.css?v=20260817-rn01">
+<link rel="stylesheet" href="assets/style.css?v=20260817-mood1">
 <style>
   /* This page scrolls — the rest of the app is fixed-viewport. */
   html,body{height:auto;overflow:auto;overscroll-behavior:auto}
@@ -529,7 +529,7 @@
               <option value="short">3–4 stations</option>
               <option value="mid">5–7 stations</option>
               <option value="long">8–10 stations</option>
-              <option value="fourline">Crosses all four lines</option>
+              <option value="fourline">Crosses all four mood categories</option>
               <option value="unique">Route nobody repeated</option>
             </select>
           </div>
@@ -551,7 +551,19 @@
         </span>
       </div>
       <p class="rs-hint" id="searchNote"></p>
-      <div class="rs-chips" id="famChips"></div>
+      <!-- Mood category, with a role of its own. As a bare "touches this
+           category" filter it was close to useless — nearly every journey
+           touches nearly every category — but which category a journey STARTS
+           or ENDS in is one of the sharpest things in the data. -->
+      <div class="rs-modes" id="famRow">
+        <span class="rs-modelabel">Mood</span>
+        <span class="rs-select rs-select-sm rs-modeselect">
+          <select id="famSelect" aria-label="Filter by mood category"></select>
+        </span>
+        <span class="rs-select rs-select-sm rs-modeselect" id="famPosWrap" hidden>
+          <select id="famPos" aria-label="The part this mood category played"></select>
+        </span>
+      </div>
       <div class="rs-chips" id="activeFilters"></div>
     </div>
 
@@ -577,7 +589,7 @@
       </div>
       <div>
         <div class="rs-block">
-          <h3>Where journeys ended <small>by line</small></h3>
+          <h3>Where journeys ended <small>by mood category</small></h3>
           <div class="rs-endsbar" id="endsBar"></div>
           <div class="rs-endslegend" id="endsLegend"></div>
         </div>
@@ -618,10 +630,10 @@
     <div class="rs-how">
       <div>
         <h3>The field</h3>
-        <p>Thirty-six emotional states, grouped into four lines — Friction &amp; Resistance,
+        <p>Thirty-six emotional states, grouped into four mood categories — Friction &amp; Resistance,
           Foundations &amp; Reflection, Connection &amp; Empathy, and Momentum &amp; Vision.
-          The layout is a transit map: related states sit near each other, and each line holds
-          its own region of the field.</p>
+          The layout is a transit map: related states sit near each other, and each
+          category holds its own region of the field.</p>
       </div>
       <div>
         <h3>The interaction</h3>
@@ -693,9 +705,9 @@
      transport is loaded, so the page can never write back to the show. */
   window.Store = { version: 0, paths: [], theme: "dark", filter: { type: "all" } };
 </script>
-<script src="assets/icons.js?v=20260817-rn01"></script>
-<script src="assets/core.js?v=20260817-rn01"></script>
-<script src="assets/qrcode.min.js?v=20260817-rn01"></script>
-<script src="assets/results.js?v=20260817-rn01"></script>
+<script src="assets/icons.js?v=20260817-mood1"></script>
+<script src="assets/core.js?v=20260817-mood1"></script>
+<script src="assets/qrcode.min.js?v=20260817-mood1"></script>
+<script src="assets/results.js?v=20260817-mood1"></script>
 </body>
 </html>
