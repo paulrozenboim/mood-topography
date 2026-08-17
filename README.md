@@ -88,6 +88,17 @@ exactly, so a bare `hope` is both a station to search for and a valid four-stop 
 `archive.html`'s reprint button goes through `view.html`, which emits a byte-identical
 receipt.
 
+The receipt modal is used twice in a row for the same person — preview, then the cast state
+with the QR and code added. That second state is ~235px taller, and because the veil centres
+the modal, committing used to throw the drawing 118px up the screen. The modal now has a
+**fixed height** and the constellation box flexes: the QR block slides in underneath and
+nothing above it moves. Measured at zero shift on every viewport from 375px up; below about
+340px wide there is genuinely not enough room and it scrolls.
+
+There is also only **one code on the receipt** now. It used to carry `№ CNDEATR` — the
+internal storage id — a few centimetres above `MT-45FVYX`, with no way to tell which one
+the search box wanted.
+
 ## Who can reach what
 
 Two public pages — `index.html` and `landscape.html` — and everything else is the
@@ -145,6 +156,28 @@ control a touch device has.
 Both animations idle when scrolled out of view or when the tab is hidden, and neither
 runs at all under `prefers-reduced-motion` — the map stays on its finished frame and the
 strip stays hand-scrollable.
+
+### On a phone
+
+`style.css` sets `canvas{touch-action:none}`, which is right for the projection and the
+kiosk — there, every drag is a gesture the canvas owns. On a page that scrolls it means a
+finger landing on the map or on a card just stops the page dead. This page overrides it
+back to `auto`: nothing here drags, the map only takes taps.
+
+A `<canvas>` also cannot be long-pressed and saved the way an `<img>` can, and a six-character
+code inside a row of chips is not realistically selectable with a thumb. So the journey
+lightbox has two explicit controls instead: a **download** button over the picture, which
+re-renders the constellation offscreen at 700×450 CSS (a 1400×900 PNG at 2×) rather than
+exporting the small on-screen one, and the **path code itself is a button** that copies.
+Both flash a tick for a beat — a control that looks like it did nothing gets pressed again.
+
+Station names are placed by the same greedy collision-aware placer the printed receipt
+uses (`placeStationLabels` in `core.js`). They used to be drawn at a flat offset below each
+dot with no collision test and no clipping guard, which is invisible on a 620px desktop
+modal and a mess on a 330px phone — measured at that size, 2 pairs of names overlapped and
+6 ran off the canvas; on a card thumbnail it was 8 and 8. It is now zero in both. Type and
+dot size scale with the canvas. **The receipt is untouched by this** — print output was
+compared pixel-for-pixel across five paths before and after, and is identical.
 
 It is deliberately **read-only and standalone**: it loads neither `store.js` nor
 `remote-config.js`, writes nothing to localStorage beyond its own theme, and never

@@ -748,6 +748,112 @@ function strokeGradientPath(ctx, sp, catCodes, theme, opts={}){
 // 66mm of printable paper (72mm roll less 3mm margins) at 96dpi. Every print
 // path renders against this so receipts are identical whatever measured them.
 const PRINT_CSS_W = 249;
+/* ============================================================
+   STATION-LABEL PLACER
+   Greedy, collision-aware placement of the numbered station names around a
+   drawn path. Longest labels go first so short ones can slot around them; each
+   one picks the highest-scoring of twelve candidate slots, scored against
+   already-placed rectangles (dots, numbers, earlier labels), against the drawn
+   curve itself (a soft penalty — crossing the line is ugly but better than
+   nowhere to go), and against running off the canvas.
+
+   This began as print-only. On screen the names were drawn at a flat offset
+   below each dot with no collision test and no clipping guard at all, which is
+   invisible on a 620px desktop modal and a mess on a 330px phone: names sat on
+   top of each other and ran off both edges. Same problem, same solution — so
+   the two callers now share one placer and differ only in their constants.
+   ============================================================ */
+function placeStationLabels(ctx, o){
+  const {pts, toS, sp, cssW, cssH, nameFS, numFS, dotClear, radiusAt,
+         nameWeight = 700, numWeight = 700} = o;
+  const LINE_H = nameFS + 2.5;
+
+  // Numbers sit at a fixed position above each dot; they are obstacles for the
+  // names rather than participants in the placement.
+  ctx.font = `${numWeight} ${numFS}px 'Martian Mono',monospace`;
+  const numRects = pts.map((n,i)=>{
+    const s = toS(n);
+    const nw = ctx.measureText(String(i+1)).width;
+    return {x0: s.x - nw/2 - 1, x1: s.x + nw/2 + 1,
+            y0: s.y - dotClear - numFS - 2, y1: s.y - dotClear + 2};
+  });
+  const dotRects = pts.map((n,i)=>{
+    const s = toS(n), rad = radiusAt(i) + 1;
+    return {x0: s.x - rad, x1: s.x + rad, y0: s.y - rad, y1: s.y + rad};
+  });
+
+  ctx.font = `${nameWeight} ${nameFS}px 'Martian Mono',monospace`;
+  const labels = pts.map((n,i)=>{
+    const s = toS(n);
+    return {s, label: n.n.toUpperCase(), tw: ctx.measureText(n.n.toUpperCase()).width, i};
+  });
+
+  // Candidate positions (dy is where the top of the text sits). Order matters —
+  // the first-preferred candidate wins ties. Below-center is the default.
+  const CAND = [
+    {dx: 0,         dy:  dotClear + 2,               al:"center"},   // below
+    {dx: 0,         dy: -dotClear - numFS - LINE_H,  al:"center"},   // above (over the number)
+    {dx:  dotClear, dy: -nameFS/2 + 1,               al:"left"  },   // right of the dot
+    {dx: -dotClear, dy: -nameFS/2 + 1,               al:"right" },   // left of the dot
+    // Diagonals — the four cardinal slots alone leave crowded clusters with
+    // nowhere to go, which is where the collisions came from.
+    {dx:  dotClear, dy:  dotClear + 1,               al:"left"  },   // lower right
+    {dx: -dotClear, dy:  dotClear + 1,               al:"right" },   // lower left
+    {dx:  dotClear, dy: -dotClear - nameFS,          al:"left"  },   // upper right
+    {dx: -dotClear, dy: -dotClear - nameFS,          al:"right" },   // upper left
+    {dx: 0,         dy:  dotClear + 2 + LINE_H,      al:"center"},   // 2 lines below
+    {dx: 0,         dy: -dotClear - numFS - LINE_H*2, al:"center"},  // 2 lines above
+  ];
+  const rectFor = (ls, c) => {
+    const ly = ls.s.y + c.dy;
+    let lx;
+    if(c.al === "center")    lx = ls.s.x - ls.tw/2;
+    else if(c.al === "left") lx = ls.s.x + c.dx;
+    else /* right */         lx = ls.s.x + c.dx - ls.tw;
+    return {x0: lx, x1: lx + ls.tw, y0: ly - 1, y1: ly + nameFS + 1, lx, ly};
+  };
+
+  const placed = [...dotRects, ...numRects];
+  // Sampled points along the drawn curve, so a name does not land straight on
+  // top of the path itself (RESILIENCE sitting on the line).
+  const pathPts = [];
+  for(let i=0; i<sp.length; i+=2) pathPts.push(sp[i]);
+  const finalPos = new Array(labels.length);
+
+  // Greedy: place hardest labels first (widest) so short labels slot around them.
+  const order = labels.map((_,i)=>i).sort((a,b)=>labels[b].tw - labels[a].tw);
+  for(const idx of order){
+    const ls = labels[idx];
+    let best = null, bestScore = -Infinity;
+    for(let ci=0; ci<CAND.length; ci++){
+      let r = rectFor(ls, CAND[ci]);
+      // Horizontal clamp — if a candidate would slide off the canvas, shift it in.
+      // This preserves the vertical slot (below/above/etc) while keeping it visible.
+      if(r.x0 < 1){ const d = 1 - r.x0; r = {...r, lx: r.lx + d, x0: 1, x1: r.x1 + d}; }
+      if(r.x1 > cssW - 1){ const d = r.x1 - (cssW - 1); r = {...r, lx: r.lx - d, x0: r.x0 - d, x1: cssW - 1}; }
+      let hits = 0;
+      for(const q of placed){
+        if(r.x0 < q.x1 && q.x0 < r.x1 && r.y0 < q.y1 && q.y0 < r.y1) hits++;
+      }
+      let onPath = 0;
+      for(const q of pathPts){
+        if(q.x > r.x0 && q.x < r.x1 && q.y > r.y0 && q.y < r.y1) onPath++;
+      }
+      const yClipped = (r.y0 < 0 || r.y1 > cssH) ? 1 : 0;
+      const score = -hits*100 - Math.min(onPath, 8)*6 - yClipped*30 - ci;
+      if(score > bestScore){ bestScore = score; best = r; }
+    }
+    // Vertical clamp, mirroring the horizontal one. If every candidate would
+    // have run past an edge the placer still had to pick one — without this the
+    // label was simply drawn off the canvas.
+    if(best.y0 < 1){ const d = 1 - best.y0; best = {...best, ly: best.ly + d, y0: 1, y1: best.y1 + d}; }
+    if(best.y1 > cssH - 1){ const d = best.y1 - (cssH - 1); best = {...best, ly: best.ly - d, y0: best.y0 - d, y1: cssH - 1}; }
+    finalPos[idx] = best;
+    placed.push({x0: best.x0, x1: best.x1, y0: best.y0, y1: best.y1});
+  }
+  return {labels, finalPos};
+}
+
 function renderConstellation(canvas, nodeIds, theme, opts={}){
   if(!nodeIds || !nodeIds.length) return;
   const print = !!opts.print;
@@ -865,97 +971,11 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
       ctx.fill();
     });
 
-    // Measure numbered label rects (fixed positions above each dot) and dot rects
-    // — these get added to the "already placed" set so name labels avoid them.
-    ctx.font = `700 ${NUM_FS}px 'Martian Mono',monospace`;
-    const numRects = pts.map((n,i)=>{
-      const s = toS(n);
-      const nw = ctx.measureText(String(i+1)).width;
-      return {x0: s.x - nw/2 - 1, x1: s.x + nw/2 + 1,
-              y0: s.y - DOT_CLEAR - NUM_FS - 2, y1: s.y - DOT_CLEAR + 2};
+    const {labels, finalPos} = placeStationLabels(ctx, {
+      pts, toS, sp, cssW, cssH,
+      nameFS: NAME_FS, numFS: NUM_FS, dotClear: DOT_CLEAR,
+      radiusAt: i => (i===0 || i===pts.length-1) ? DOT_END : DOT_MID
     });
-    const dotRects = pts.map((n,i)=>{
-      const s = toS(n);
-      const rad = ((i===0||i===pts.length-1) ? DOT_END : DOT_MID) + 1;
-      return {x0: s.x - rad, x1: s.x + rad, y0: s.y - rad, y1: s.y + rad};
-    });
-
-    // Measure each station name at its display size.
-    ctx.font = `700 ${NAME_FS}px 'Martian Mono',monospace`;
-    const labels = pts.map((n,i)=>{
-      const s = toS(n);
-      return {s, label: n.n.toUpperCase(), tw: ctx.measureText(n.n.toUpperCase()).width, i};
-    });
-
-    // Candidate positions (dy is where the top of the text sits). Order matters —
-    // the first-preferred candidate wins ties. Below-center is the default.
-    const CAND = [
-      {dx: 0,          dy:  DOT_CLEAR + 2,               al:"center"},   // below
-      {dx: 0,          dy: -DOT_CLEAR - NUM_FS - LINE_H, al:"center"},   // above (over the number)
-      {dx:  DOT_CLEAR, dy: -NAME_FS/2 + 1,               al:"left"  },   // right of the dot
-      {dx: -DOT_CLEAR, dy: -NAME_FS/2 + 1,               al:"right" },   // left of the dot
-      // Diagonals — the four cardinal slots alone leave crowded clusters with
-      // nowhere to go, which is where the collisions on the receipt came from.
-      {dx:  DOT_CLEAR, dy:  DOT_CLEAR + 1,               al:"left"  },   // lower right
-      {dx: -DOT_CLEAR, dy:  DOT_CLEAR + 1,               al:"right" },   // lower left
-      {dx:  DOT_CLEAR, dy: -DOT_CLEAR - NAME_FS,         al:"left"  },   // upper right
-      {dx: -DOT_CLEAR, dy: -DOT_CLEAR - NAME_FS,         al:"right" },   // upper left
-      {dx: 0,          dy:  DOT_CLEAR + 2 + LINE_H,      al:"center"},   // 2 lines below
-      {dx: 0,          dy: -DOT_CLEAR - NUM_FS - LINE_H*2, al:"center"}, // 2 lines above
-    ];
-    const rectFor = (ls, c) => {
-      const ly = ls.s.y + c.dy;
-      let lx;
-      if(c.al === "center")    lx = ls.s.x - ls.tw/2;
-      else if(c.al === "left") lx = ls.s.x + c.dx;
-      else /* right */         lx = ls.s.x + c.dx - ls.tw;
-      return {x0: lx, x1: lx + ls.tw, y0: ly - 1, y1: ly + NAME_FS + 1, lx, ly};
-    };
-
-    const placed = [...dotRects, ...numRects];
-    // Sampled points along the drawn curve. The placer previously only knew
-    // about dots, numbers and other labels, so names happily landed straight on
-    // top of the path itself (RESILIENCE sitting on the line). These carry a
-    // softer penalty than a hard collision — crossing the line is ugly but
-    // acceptable when there is genuinely nowhere else to go.
-    const pathPts = [];
-    for(let i=0; i<sp.length; i+=2) pathPts.push(sp[i]);
-    const finalPos = new Array(labels.length);
-
-    // Greedy: place hardest labels first (widest) so short labels can slot around them.
-    const order = labels.map((_,i)=>i).sort((a,b)=>labels[b].tw - labels[a].tw);
-    for(const idx of order){
-      const ls = labels[idx];
-      let best = null, bestScore = -Infinity;
-      for(let ci=0; ci<CAND.length; ci++){
-        let r = rectFor(ls, CAND[ci]);
-        // Horizontal clamp — if a candidate would slide off the canvas, shift it in.
-        // This preserves the vertical slot (below/above/etc) while keeping the label visible.
-        if(r.x0 < 1){ const d = 1 - r.x0; r = {...r, lx: r.lx + d, x0: 1, x1: r.x1 + d}; }
-        if(r.x1 > cssW - 1){ const d = r.x1 - (cssW - 1); r = {...r, lx: r.lx - d, x0: r.x0 - d, x1: cssW - 1}; }
-        let hits = 0;
-        for(const p of placed){
-          if(r.x0 < p.x1 && p.x0 < r.x1 && r.y0 < p.y1 && p.y0 < r.y1) hits++;
-        }
-        let onPath = 0;
-        for(const q of pathPts){
-          if(q.x > r.x0 && q.x < r.x1 && q.y > r.y0 && q.y < r.y1) onPath++;
-        }
-        const yClipped = (r.y0 < 0 || r.y1 > cssH) ? 1 : 0;
-        // Hard collisions dominate; sitting on the curve is a tiebreaker that
-        // pushes labels off the line whenever a clear slot exists.
-        const score = -hits*100 - Math.min(onPath, 8)*6 - yClipped*30 - ci;
-        if(score > bestScore){ bestScore = score; best = r; }
-      }
-      // Vertical clamp, mirroring the horizontal one above. If every candidate
-      // would have run past the top or bottom edge the placer still had to pick
-      // one — without this the label was simply printed off the paper, which is
-      // the "sometimes it just gets cut" case.
-      if(best.y0 < 1){ const d = 1 - best.y0; best = {...best, ly: best.ly + d, y0: 1, y1: best.y1 + d}; }
-      if(best.y1 > cssH - 1){ const d = best.y1 - (cssH - 1); best = {...best, ly: best.ly - d, y0: best.y0 - d, y1: cssH - 1}; }
-      finalPos[idx] = best;
-      placed.push({x0: best.x0, x1: best.x1, y0: best.y0, y1: best.y1});
-    }
 
     // Draw the numbers (centered above each dot — always-placed positions).
     ctx.font = `700 ${NUM_FS}px 'Martian Mono',monospace`;
@@ -979,27 +999,42 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
     return;
   }
 
-  // opts.labels:false draws the route and its stations but no text. Type is
-  // sized in fixed px, so below roughly 260px wide the names swamp the drawing
-  // and run off the edges — thumbnail grids pass false and name the path in
-  // their own caption instead. Every existing caller omits it and keeps labels.
-  const labels = opts.labels !== false;
-  const dotScale = labels ? 1 : Math.max(0.55, Math.min(1, cssW/260));
+  // ------- Screen: dots first, then the same greedy placer print uses -------
+  // opts.labels:false draws the route and its stations but no text — thumbnail
+  // grids pass false and name the path in their own caption instead.
+  const showLabels = opts.labels !== false;
+  // Type and dots scale with the canvas. They used to be flat 10/11px with
+  // radius 7/5 at every size, which is why the phone-sized modal came out with
+  // names three times too big for the drawing they were annotating.
+  const dotScale = showLabels ? Math.max(.62, Math.min(1, cssW/420))
+                              : Math.max(.55, Math.min(1, cssW/260));
+  const radiusAt = i => ((i===0 || i===pts.length-1) ? 7 : 5) * dotScale;
+
   pts.forEach((n,i)=>{
-    const s=toS(n);
-    const col=catColor(n.c,theme);
-    const end = i===0 || i===pts.length-1;
-    ctx.beginPath(); ctx.arc(s.x,s.y,(end?7:5)*dotScale,0,7);
-    ctx.fillStyle= i===0 ? col : bg; ctx.fill();
-    ctx.lineWidth=1.8*dotScale; ctx.strokeStyle=col; ctx.stroke();
-    if(!labels) return;
-    ctx.font=`600 10px 'Martian Mono',monospace`;
-    ctx.fillStyle=ink3; ctx.textAlign="center";
-    ctx.fillText(String(i+1), s.x, s.y-14);
-    ctx.font=`400 11px 'Martian Mono',monospace`;
-    ctx.fillStyle=ink;
-    ctx.fillText(n.n.toUpperCase(), s.x, s.y+18);
+    const s2 = toS(n);
+    const col = catColor(n.c, theme);
+    ctx.beginPath(); ctx.arc(s2.x, s2.y, radiusAt(i), 0, 7);
+    ctx.fillStyle = i===0 ? col : bg; ctx.fill();
+    ctx.lineWidth = 1.8*dotScale; ctx.strokeStyle = col; ctx.stroke();
   });
+  if(!showLabels) return;
+
+  const NAME_FS   = Math.max(7.5, Math.min(11, cssW * 0.028));
+  const NUM_FS    = Math.max(6.5, NAME_FS - 2);
+  const DOT_CLEAR = radiusAt(0) + 3;
+  const {labels: lbls, finalPos} = placeStationLabels(ctx, {
+    pts, toS, sp, cssW, cssH,
+    nameFS: NAME_FS, numFS: NUM_FS, dotClear: DOT_CLEAR, radiusAt,
+    nameWeight: 400, numWeight: 600
+  });
+
+  ctx.font = `600 ${NUM_FS}px 'Martian Mono',monospace`;
+  ctx.fillStyle = ink3; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  pts.forEach((n,i)=>{ const s2 = toS(n); ctx.fillText(String(i+1), s2.x, s2.y - DOT_CLEAR - 1); });
+
+  ctx.font = `400 ${NAME_FS}px 'Martian Mono',monospace`;
+  ctx.fillStyle = ink; ctx.textAlign = "left"; ctx.textBaseline = "top";
+  lbls.forEach((ls,i)=>{ const pos = finalPos[i]; ctx.fillText(ls.label, pos.lx, pos.ly); });
 }
 
 /* ============================================================

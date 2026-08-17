@@ -1343,14 +1343,76 @@ function openJourney(id) {
     twins ? `${twins} other${twins === 1 ? "" : "s"} traced this exact route` : "Route traced by this person alone"
   ].map(t => `<span>${esc(t)}</span>`).join("")
     // The code that was on the receipt, so someone can check they have the
-    // right path — and read it back out to a friend.
-    + `<span class="jcode">${esc(pathCode(p.nodes))}</span>`;
+    // right path — and read it back out to a friend. A button rather than a
+    // span: selecting text inside a chip on a phone is a fight nobody wins.
+    + `<button type="button" class="jcode" data-code="${esc(pathCode(p.nodes))}"
+         title="Copy path code">${esc(pathCode(p.nodes))}${Icons.copy}</button>`;
   $("jModal").classList.add("on");
   $("jModal").setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
   $("jModal")._path = p;
   paintWhenSized($("jCanvas"), () => renderConstellation($("jCanvas"), p.nodes, S.theme));
 }
+/* Flash a tick on a button for a beat, then put it back. Used by both the copy
+   chip and the save button — on a phone neither one produces any visible
+   feedback of its own, and a control that looks like it did nothing gets
+   pressed again and again. */
+function flashDone(btn, restore) {
+  btn.classList.add("done");
+  clearTimeout(btn._flash);
+  btn._flash = setTimeout(() => { btn.classList.remove("done"); restore(); }, 1500);
+}
+
+async function copyText(str) {
+  try {
+    await navigator.clipboard.writeText(str);
+    return true;
+  } catch (_) {
+    // Safari refuses the async clipboard outside a few contexts; the old
+    // execCommand path still works there and costs nothing to keep.
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = str;
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch (__) { return false; }
+  }
+}
+
+/* Save the constellation as a PNG. A <canvas> cannot be long-pressed and saved
+   the way an <img> can, so on a phone this is the only route to keeping the
+   picture. Re-rendered at 2x into an offscreen canvas rather than exporting the
+   one on screen: the on-screen one is sized for a 42vh box and would come out
+   as a small, soft image. */
+function saveJourneyPNG(p, btn) {
+  // CSS pixels, not output pixels. renderConstellation sizes its type against
+  // the box it is drawing into and then multiplies by devicePixelRatio, so a
+  // 1400px-wide holder would produce 11px labels on a 2800px image. 700x450 at
+  // 2x lands a 1400x900 PNG whose labels are the size they look on screen.
+  const W = 700, H = 450;
+  const holder = document.createElement("div");
+  holder.style.cssText = `position:fixed;left:-99999px;top:0;width:${W}px;height:${H}px`;
+  const cv = document.createElement("canvas");
+  holder.appendChild(cv);
+  document.body.appendChild(holder);
+  renderConstellation(cv, p.nodes, S.theme);
+  const url = cv.toDataURL("image/png");
+  holder.remove();
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `mood-topography-${pathCode(p.nodes)}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  if (btn) flashDone(btn, () => { btn.innerHTML = Icons.download; });
+  if (btn) btn.innerHTML = Icons.check;
+}
+
 function closeJourney() {
   $("jModal").classList.remove("on");
   $("jModal").setAttribute("aria-hidden", "true");
@@ -1545,6 +1607,21 @@ function wire() {
   $("jClose").innerHTML = Icons.close;
   $("jClose").onclick = closeJourney;
   $("jModal").addEventListener("click", ev => { if (ev.target === $("jModal")) closeJourney(); });
+  $("jSave").innerHTML = Icons.download;
+  $("jSave").onclick = () => {
+    const p = $("jModal")._path;
+    if (p) saveJourneyPNG(p, $("jSave"));
+  };
+  // Delegated: the chip is rebuilt every time a journey opens.
+  $("jFacts").addEventListener("click", async ev => {
+    const btn = ev.target.closest(".jcode");
+    if (!btn) return;
+    const code = btn.dataset.code;
+    if (await copyText(code)) {
+      btn.innerHTML = esc("Copied") + Icons.check;
+      flashDone(btn, () => { btn.innerHTML = esc(code) + Icons.copy; });
+    }
+  });
   document.addEventListener("keydown", ev => { if (ev.key === "Escape") { closeJourney(); closeShare(); } });
 
   // share

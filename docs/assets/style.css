@@ -203,15 +203,26 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
    the foot with the buttons stays pinned at the bottom so the participant
    can always reach Print/Done without hunting. dvh is used to handle mobile
    Safari's URL bar collapsing correctly — vh includes it, dvh doesn't. */
+/* A FIXED height, not just a cap. The modal is used twice in a row for the
+   same person: preview, then the cast receipt with the QR and path code added.
+   Sized to the content, that second state was 235px taller — and because the
+   veil centres the modal, the constellation someone was looking at jumped 118px
+   up the screen the instant they committed. Pinning the height makes the two
+   states the same box; the constellation below flexes to absorb the difference,
+   so the QR block slides in underneath and nothing else moves at all. */
 .modal{width:min(560px,94vw);position:relative;
+  height:min(760px, calc(100vh - 40px));
+  height:min(760px, calc(100dvh - 40px));
   max-height:calc(100vh - 40px);
   max-height:calc(100dvh - 40px);
   display:flex;flex-direction:column;
   background:var(--bg);box-shadow:0 0 0 1px var(--hair),0 30px 80px rgba(0,0,0,.5);
   transform:translateY(10px) scale(.98);transition:transform .3s var(--ease)}
 .modal-veil.on .modal{transform:translateY(0) scale(1)}
+/* Flex column so the constellation can be the part that gives. Still scrolls
+   when even the minimum heights don't fit (short landscape viewports). */
 .print-area{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
-  -webkit-overflow-scrolling:touch}
+  -webkit-overflow-scrolling:touch;display:flex;flex-direction:column}
 .modal-foot{flex:0 0 auto;border-top:1px solid var(--hair)}
 /* Close affordance for the cast receipt — the modal no longer times out, so a
    deliberate dismiss control is the only way back to the kiosk. Sized for a
@@ -223,7 +234,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .modal-head{padding:20px 56px 0 22px}
 .modal-head h3{font-size:20px;font-weight:800;font-variation-settings:'wdth' 118;text-transform:uppercase;line-height:1.15}
 .modal-head p{margin-top:6px;font-family:'Martian Mono',monospace;font-size:10.5px;color:var(--ink-2);letter-spacing:.04em}
-.constellation-wrap{position:relative;margin:16px 22px;height:min(46vh,340px);background:#05060700 ;
+/* Grows into whatever the rest of the modal isn't using, down to a floor that
+   still reads as a drawing. This is what absorbs the keepsake block. */
+.constellation-wrap{position:relative;margin:16px 22px;flex:1 1 auto;
+  min-height:180px;background:#05060700 ;
   box-shadow:inset 0 0 0 1px var(--hair)}
 /* Landscape (horizontal iPad, wide-and-short viewports) — widen the modal so
    the constellation stays legible AND leaves room for the QR keepsake below
@@ -231,10 +245,24 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
    so the QR block is always visible in the viewport. */
 @media (orientation: landscape) and (min-width: 900px){
   .modal{width:min(820px,94vw)}
-  .constellation-wrap{height:min(38vh,260px)}
+}
+/* Narrow screens: the keepsake block is the same height but there is far less
+   to give, so the drawing's floor has to come down or the receipt starts
+   scrolling — which reintroduces exactly the shift this is here to prevent. */
+@media (max-width: 460px){
+  .constellation-wrap{min-height:150px}
+  /* One line for "Your constellation" too. At 20px it wrapped and the heading
+     for the cast state ("Your path") did not, so committing shortened the head
+     by a line and pulled the drawing up with it. */
+  .modal-head h3{font-size:18px}
+  /* Same reasoning as the short-landscape block: a 140px QR beside its text is
+     most of a phone's width, and every pixel it gives back is a pixel the
+     drawing keeps. Still comfortably scannable. */
+  .keepsake{padding:10px}
+  .keepsake canvas{width:108px!important;height:108px!important}
 }
 @media (orientation: landscape) and (max-height: 720px){
-  .constellation-wrap{height:min(34vh,220px)}
+  .constellation-wrap{min-height:130px}
   /* Right padding must stay clear of the close button, which sits in the
      same corner — hence 56px here too, not the flat 22px. */
   .modal-head{padding:14px 56px 0 22px}
@@ -329,8 +357,11 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     width:auto!important;max-width:100%!important;max-height:none!important;
     background:none!important;display:block!important}
   .modal-foot, .modal-list, .stub-meta{display:none!important}
+    /* Back to normal block flow — the on-screen flex column exists only to keep
+     the modal from jumping, and stretching it across a paper roll of unknown
+     length is not something flex should be deciding. */
   .print-area{position:static!important;padding:0!important;background:#fff;
-    visibility:hidden;overflow:visible!important}
+    visibility:hidden;overflow:visible!important;display:block!important}
   .print-area *{visibility:visible}
   .print-area canvas, .print-area svg{filter:none}
 
@@ -352,7 +383,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
      kills the whitespace that showed up under wide/short paths on receipts.
      The 100%-forcing width/height rules from screen would defeat this — hence
      the width:auto/height:auto here (canvas has explicit inline sizes in print). */
-  .constellation-wrap{height:auto!important;margin:2mm 0 3mm 0!important;
+  .constellation-wrap{height:auto!important;min-height:0!important;max-height:none!important;
+    margin:2mm 0 3mm 0!important;
     box-shadow:none!important;border:none!important;background:#fff!important;
     line-height:0}
   .constellation-wrap canvas{width:100%!important;height:auto!important;display:block!important}

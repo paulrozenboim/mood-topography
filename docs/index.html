@@ -13,7 +13,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0A0B0D">
-<link rel="stylesheet" href="assets/style.css?v=20260818-root1">
+<link rel="stylesheet" href="assets/style.css?v=20260818-touch5">
 <style>
   /* This page scrolls — the rest of the app is fixed-viewport. */
   html,body{height:auto;overflow:auto;overscroll-behavior:auto}
@@ -22,6 +22,19 @@
      `[hidden]{display:none}`. Everything here toggles visibility via the hidden
      attribute, so make it win outright. */
   [hidden]{display:none!important}
+
+  /* style.css sets `canvas{touch-action:none}` — correct for the projection and
+     the kiosk, where every drag is a gesture the canvas owns. On a page that
+     scrolls it means a finger that happens to land on the map, a card thumbnail
+     or the lightbox picture is swallowed and the page just stops. Nothing here
+     drags; the map only takes taps. Hand the gestures back to the browser. */
+  canvas{touch-action:auto}
+
+  /* Same story for selection: let people press-and-hold to select and copy,
+     the path code above all. Explicit rather than inherited, because iOS
+     suppresses the callout on anything inside a tap handler otherwise. */
+  .rs-modal-body,.rs-modal-body *{-webkit-user-select:text;user-select:text;
+    -webkit-touch-callout:default}
 
   .rs{max-width:1180px;margin:0 auto;padding:0 var(--pad)}
   .rs-tail{padding-bottom:80px}
@@ -355,8 +368,27 @@
   .rs-facts{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
   .rs-facts span{font-family:'Martian Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
     color:var(--ink-3);padding:5px 9px;box-shadow:inset 0 0 0 1px var(--hair)}
-  .rs-facts .jcode{color:var(--ink);font-weight:700;letter-spacing:.14em;
-    box-shadow:inset 0 0 0 1px var(--ink-3)}
+  /* The path code is a button-with-text, not a span: on a phone press-and-hold
+     to select six characters out of a row of chips is fiddly enough that people
+     give up, and this is the one string they came for. Tap copies it. */
+  .rs-facts .jcode{display:inline-flex;align-items:center;gap:8px;
+    color:var(--ink);font-weight:700;letter-spacing:.14em;font:inherit;
+    font-family:'Martian Mono',monospace;font-size:9.5px;text-transform:uppercase;
+    padding:5px 9px;background:none;box-shadow:inset 0 0 0 1px var(--ink-3)}
+  .rs-facts .jcode .icon{width:13px;height:13px;color:var(--ink-3);flex:none}
+  .rs-facts .jcode:hover .icon{color:var(--ink)}
+  .rs-facts .jcode.done{box-shadow:inset 0 0 0 1px var(--line-c)}
+  .rs-facts .jcode.done .icon{color:var(--line-c)}
+
+  /* Save the picture. A canvas has no long-press-to-save, so without this
+     button there is simply no way to keep the image off a phone. */
+  .rs-const .rs-save{position:absolute;top:8px;right:8px;z-index:3;
+    width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;
+    color:var(--ink-3);background:var(--panel);backdrop-filter:blur(8px);
+    box-shadow:inset 0 0 0 1px var(--hair)}
+  .rs-const .rs-save:hover{color:var(--ink)}
+  .rs-const .rs-save .icon{width:15px;height:15px}
+  .rs-const .rs-save.done{color:var(--line-c)}
   .rs-stops{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;padding-bottom:18px}
   .rs-stops span{display:inline-flex;align-items:center;gap:6px;font-family:'Martian Mono',monospace;
     font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;box-shadow:inset 0 0 0 1px var(--hair)}
@@ -683,7 +715,10 @@
     <div class="rs-modal-body">
       <h3 id="jTitle"></h3>
       <p class="rs-when" id="jWhen"></p>
-      <div class="rs-const"><canvas id="jCanvas"></canvas></div>
+      <div class="rs-const">
+        <canvas id="jCanvas"></canvas>
+        <button type="button" id="jSave" title="Save as image" aria-label="Save as image" class="rs-save"></button>
+      </div>
       <div class="rs-facts" id="jFacts"></div>
       <div class="rs-stops" id="jStops"></div>
     </div>
@@ -705,9 +740,9 @@
      transport is loaded, so the page can never write back to the show. */
   window.Store = { version: 0, paths: [], theme: "dark", filter: { type: "all" } };
 </script>
-<script src="assets/icons.js?v=20260818-root1"></script>
-<script src="assets/core.js?v=20260818-root1"></script>
-<script src="assets/qrcode.min.js?v=20260818-root1"></script>
-<script src="assets/results.js?v=20260818-root1"></script>
+<script src="assets/icons.js?v=20260818-touch5"></script>
+<script src="assets/core.js?v=20260818-touch5"></script>
+<script src="assets/qrcode.min.js?v=20260818-touch5"></script>
+<script src="assets/results.js?v=20260818-touch5"></script>
 </body>
 </html>

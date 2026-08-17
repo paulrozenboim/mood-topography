@@ -30,6 +30,29 @@ const Icons = {
       '<path d="M10 10h2v2h-2zM14 10h4v2h-4zM10 14h2v4h-2zM14 14h4v4h-4z"/>' +
     '</svg>',
 
+  // Arrow into a tray. A canvas cannot be long-pressed and saved the way an
+  // <img> can, so on a phone this button is the ONLY way to keep the picture.
+  download:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M10 2.6 V12"/>' +
+      '<path d="M6.2 8.4 L10 12.2 L13.8 8.4"/>' +
+      '<path d="M3.2 13.6 v2.3 a1.5 1.5 0 0 0 1.5 1.5 h10.6 a1.5 1.5 0 0 0 1.5 -1.5 v-2.3"/>' +
+    '</svg>',
+
+  // Two offset sheets. Sits beside the path code, which is the one string on
+  // the page people actually need to carry somewhere else.
+  copy:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">' +
+      '<rect x="7.2" y="7.2" width="9.6" height="9.6" rx="1.2"/>' +
+      '<path d="M12.8 4.6 a1.4 1.4 0 0 0 -1.4 -1.4 H4.6 a1.4 1.4 0 0 0 -1.4 1.4 v6.8 a1.4 1.4 0 0 0 1.4 1.4"/>' +
+    '</svg>',
+
+  // Confirmation tick — swapped in for a beat after a copy or a save.
+  check:
+    '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M4 10.6 L8 14.6 L16 5.6"/>' +
+    '</svg>',
+
   // Four corner brackets — the "fit view" glyph most map tools use.
   fit:
     '<svg class="icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
