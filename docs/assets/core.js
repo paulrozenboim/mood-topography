@@ -99,7 +99,7 @@ function decodePath(str){
    alphabet overlaps completely — "hope" is a perfectly valid four-stop code
    (h,o,p,e → Hope, Care, Listening, Belonging).
    ------------------------------------------------------------------ */
-const PUBLIC_BASE  = "https://paulrozenboim.github.io/topography-of-us/";
+const PUBLIC_BASE  = "https://paulrozenboim.github.io/mood-topography/";
 const CODE_PREFIX  = "MT";
 
 function pathCode(nodeIds){
