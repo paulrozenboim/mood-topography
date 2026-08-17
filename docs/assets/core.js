@@ -84,12 +84,55 @@ function decodePath(str){
   if(ids.some(n=>isNaN(n)||n<0||n>=NODES.length)) return [];
   return ids;
 }
+/* ------------------------------------------------------------------
+   PUBLIC ADDRESS + PATH CODES
+
+   PUBLIC_BASE is the deployed, publicly reachable address of the site. It is
+   PRINTED on receipts, so it must be the real public URL and not wherever the
+   kiosk happens to be served from — a QR encoding a laptop's LAN address is
+   dead paper the moment the participant walks out of the room. Update this if
+   the site ever moves.
+
+   A path code is the same base36 the URL hash uses, upper-cased and prefixed so
+   a person can read it off thermal paper and type it in. The prefix is load-
+   bearing: a bare code is indistinguishable from a station search, because the
+   alphabet overlaps completely — "hope" is a perfectly valid four-stop code
+   (h,o,p,e → Hope, Care, Listening, Belonging).
+   ------------------------------------------------------------------ */
+const PUBLIC_BASE  = "https://paulrozenboim.github.io/topography-of-us/";
+const CODE_PREFIX  = "MT";
+
+function pathCode(nodeIds){
+  return CODE_PREFIX + "-" + encodePath(nodeIds).toUpperCase();
+}
+// Forgiving about how it arrives: any case, dash optional, stray spaces fine.
+function parsePathCode(str){
+  const m = String(str||"").trim().match(/^mt[\s\-–—_.]*([0-9a-z]+)$/i);
+  return m ? decodePath(m[1].toLowerCase()) : [];
+}
+// The address a receipt points at: the results page with this path already found.
+function resultsURLFor(nodeIds){
+  return PUBLIC_BASE + "results.html#q=" + encodeURIComponent(pathCode(nodeIds));
+}
+
 // Cast timestamp piggybacks on the URL so view.html can show WHEN the path was cast,
 // not the visit time. Base36 of seconds-since-epoch fits comfortably in 7 chars.
 function encodeTime(ts){ return Math.floor(ts/1000).toString(36) }
 function decodeTime(str){
   const n = parseInt(str,36);
   return (isFinite(n) && n>0) ? n*1000 : 0;
+}
+
+/* ============================================================
+   WHAT EVERY SURFACE ACTUALLY SHOWS
+   Store.paths is the full record, rehearsal paths included. Nothing that
+   DISPLAYS should read it directly — the wall, the terrain, the archive and
+   the analysis all go through here, so one toggle in Settings governs the lot.
+   Store.paths itself stays complete: hiding demo paths is a view, not a delete,
+   and "Clear demo paths" is still the thing that removes them.
+   ============================================================ */
+function activePaths(){
+  return Store.showDemo ? Store.paths : Store.paths.filter(p => !p.seeded);
 }
 
 /* ============================================================
@@ -274,7 +317,7 @@ function bulletins(A){
     const e=A.edgeList[0];
     out.push({tag:"Heaviest link", accent:NODES[e.a].c,
       line:`${e.v} of you moved between {${NODES[e.a].n}} and {${NODES[e.b].n}}.`,
-      sub:"The most walked segment in this room",
+      sub:"The most walked segment tonight",
       focus:{type:"edge", e, motion:"traverse"}});
   }
   if(A.topNode){
@@ -377,7 +420,7 @@ function bulletins(A){
     const e=A.edgeList[1];
     out.push({tag:"Also well-travelled", accent:NODES[e.a].c,
       line:`${e.v} of you also walked between {${NODES[e.a].n}} and {${NODES[e.b].n}}.`,
-      sub:"The second most walked segment in this room",
+      sub:"The second most walked segment tonight",
       focus:{type:"edge", e, motion:"traverse"}});
   }
 
@@ -507,7 +550,7 @@ function bulletins(A){
   // paths sharing it are all "repeated". Say what we actually mean.
   out.push({tag:"Network status",
     line:`${A.total} journeys cast. ${A.distinct} distinct routes among them.`,
-    sub:"Every line on this wall was drawn by someone in this room"});
+    sub:"Every line on this wall was traced by hand"});
   return out;
 }
 
@@ -709,7 +752,9 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
   // Print needs a wider margin than screen: the receipt is only ~66mm across, so
   // a station name is a big fraction of the width and needs somewhere to sit
   // without running off the paper.
-  const worldPad = print ? 165 : 90;
+  // Most of the screen padding exists so station names have somewhere to sit;
+  // with labels off the route can breathe into it and fill the frame instead.
+  const worldPad = print ? 165 : (opts.labels === false ? 46 : 90);
   const bx0=Math.min(...xs)-worldPad, bx1=Math.max(...xs)+worldPad,
         by0=Math.min(...ys)-worldPad, by1=Math.max(...ys)+worldPad;
   const worldW = bx1-bx0, worldH = by1-by0;
@@ -920,12 +965,20 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
     return;
   }
 
+  // opts.labels:false draws the route and its stations but no text. Type is
+  // sized in fixed px, so below roughly 260px wide the names swamp the drawing
+  // and run off the edges — thumbnail grids pass false and name the path in
+  // their own caption instead. Every existing caller omits it and keeps labels.
+  const labels = opts.labels !== false;
+  const dotScale = labels ? 1 : Math.max(0.55, Math.min(1, cssW/260));
   pts.forEach((n,i)=>{
     const s=toS(n);
     const col=catColor(n.c,theme);
-    ctx.beginPath(); ctx.arc(s.x,s.y,i===0||i===pts.length-1?7:5,0,7);
+    const end = i===0 || i===pts.length-1;
+    ctx.beginPath(); ctx.arc(s.x,s.y,(end?7:5)*dotScale,0,7);
     ctx.fillStyle= i===0 ? col : bg; ctx.fill();
-    ctx.lineWidth=1.8; ctx.strokeStyle=col; ctx.stroke();
+    ctx.lineWidth=1.8*dotScale; ctx.strokeStyle=col; ctx.stroke();
+    if(!labels) return;
     ctx.font=`600 10px 'Martian Mono',monospace`;
     ctx.fillStyle=ink3; ctx.textAlign="center";
     ctx.fillText(String(i+1), s.x, s.y-14);
@@ -1126,7 +1179,7 @@ class MapView{
 
   visiblePaths(){
     if(!this.opts.showAggregate) return [];
-    const f=Store.filter, ps=Store.paths;
+    const f=Store.filter, ps=activePaths();
     if(f.type==="blank") return [];
     if(f.type==="recent") return ps.slice(-12);
     if(f.type==="cat")    return ps.filter(p=>p.nodes.some(i=>NODES[i].c===f.c));
@@ -1202,7 +1255,7 @@ class MapView{
     this.dirty=false;
   }
   loop(ts){
-    this.A = analyse(Store.paths);
+    this.A = analyse(activePaths());
     if(this.dirty) this.drawAggregate();
     const ctx=this.ctx, theme=this.theme, dark=theme==="dark";
     const bg=this.css("--bg"), ink=this.css("--ink"), ink2=this.css("--ink-2");
@@ -1263,7 +1316,7 @@ class MapView{
         if(this.focus.type==="node") em = this.focus.id===n.id?1:.22;
         if(this.focus.type==="cat")  em = this.focus.c===n.c?1:.22;
         if(this.focus.type==="edge") em = (this.focus.e.a===n.id||this.focus.e.b===n.id)?1:.22;
-        if(this.focus.type==="path"){const p=Store.paths.find(x=>x.id===this.focus.id); em=p&&p.nodes.includes(n.id)?1:.22}
+        if(this.focus.type==="path"){const p=activePaths().find(x=>x.id===this.focus.id); em=p&&p.nodes.includes(n.id)?1:.22}
       }
       const active = this.draft && this.draft.nodes.includes(n.id);
       const hot = this.hot===n.id;
@@ -1283,7 +1336,7 @@ class MapView{
         } else if(this.focus.motion==="traverse" && this.focus.type==="path"){
           // Punch each station on the focused path slightly, so it reads as
           // "these are the stations that path visits" without the trail alone.
-          const p = Store.paths.find(x=>x.id===this.focus.id);
+          const p = activePaths().find(x=>x.id===this.focus.id);
           if(p && p.nodes.includes(n.id)) focusScale = 1.15 + 0.08*Math.sin(T*3 + n.id*0.3);
         }
       }
@@ -1466,7 +1519,7 @@ class MapView{
       let ids = null;
       if(f.type === "edge") ids = [f.e.a, f.e.b];
       else if(f.type === "path"){
-        const p = Store.paths.find(x=>x.id===f.id);
+        const p = activePaths().find(x=>x.id===f.id);
         if(p) ids = p.nodes;
       }
       if(!ids) return;
@@ -1516,7 +1569,7 @@ class MapView{
       const t = T % total;
       const idx = Math.min(ids.length-1, Math.floor(t / per));
       const phase = (t - idx*per) / per;        // 0..1 within one path's window
-      const p = Store.paths.find(x=>x.id===ids[idx]); if(!p) return;
+      const p = activePaths().find(x=>x.id===ids[idx]); if(!p) return;
       const wp = p.nodes.map(i=>NODES[i]);
       const cats = p.nodes.map(i=>NODES[i].c);
       const sp = splinePoints(wp.map(pt=>({x:pt.x,y:pt.y})), g).map(q=>this.toScreen(q));

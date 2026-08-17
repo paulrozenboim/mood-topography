@@ -14,6 +14,7 @@ function initQuickNav({current, actions=[]}={}){
     ["projection.html","Projection","projection"],
     ["landscape.html","Landscape","landscape"],
     ["archive.html","Archive","archive"],
+    ["results.html","Results","results"],
     ["settings.html","Settings","settings"]
   ];
   const handle=document.createElement("button");

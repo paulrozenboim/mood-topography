@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Mood Topography</title>
+<meta name="description" content="People traced a path through 36 emotional states. Together, their journeys became a live map of the night.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="The Mood Topography">
+<meta property="og:description" content="People traced a path through 36 emotional states. Together, their journeys became a live map of the night.">
+<meta property="og:image" content="assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0A0B0D">
+<link rel="stylesheet" href="assets/style.css?v=20260817-fin1">
+<style>
+  /* This page scrolls — the rest of the app is fixed-viewport. */
+  html,body{height:auto;overflow:auto;overscroll-behavior:auto}
+  body{-webkit-font-smoothing:antialiased}
+  /* Several elements below set `display` in a rule, which outranks the UA's
+     `[hidden]{display:none}`. Everything here toggles visibility via the hidden
+     attribute, so make it win outright. */
+  [hidden]{display:none!important}
+
+  .rs{max-width:1180px;margin:0 auto;padding:0 var(--pad)}
+  .rs-tail{padding-bottom:80px}
+  .rs section{padding-top:clamp(40px,7vw,76px)}
+  .rs h2{font-size:clamp(19px,3.2vw,30px);font-weight:800;font-variation-settings:'wdth' 118;
+    text-transform:uppercase;letter-spacing:-.012em;line-height:1.05}
+  .rs .rs-sub{margin-top:8px;font-family:'Martian Mono',monospace;font-size:11px;line-height:1.65;
+    color:var(--ink-3);letter-spacing:.03em;max-width:62ch}
+  .rs-dim{color:var(--ink-3)}
+  .rs-note{font-family:'Martian Mono',monospace;font-size:11px;color:var(--ink-3);line-height:1.7}
+  .rs-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    padding-bottom:12px;border-bottom:1px solid var(--hair);margin-bottom:18px}
+  .rs-count{font-family:'Martian Mono',monospace;font-size:10px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+  .rs-count b{color:var(--ink)}
+
+  /* ---------- hero ---------- */
+  .rs-hero{padding-top:clamp(14px,2.2vw,24px)}
+  /* Title and actions on one line. The small top offset drops the buttons to
+     the title's cap height — flex-start alone aligns them to the line box,
+     which sits noticeably above the letterforms at this size and made them
+     read as floating over the title. */
+  /* Absolute rather than a flex row: on a phone "TOPOGRAPHY" is wider than the
+     space left beside two buttons, so a row pushed them off the edge. Pinned
+     top-right they sit beside the short first line ("THE MOOD") and the long
+     second line passes underneath them. */
+  .rs-herotop{position:relative}
+  .rs-actions{position:absolute;right:0;top:clamp(2px,1vw,12px);display:flex;gap:6px}
+  @media(max-width:520px){
+    .rs-actions .rs-btn{height:32px;font-size:9px;padding:0 10px}
+    .rs-actions .rs-btn.icon-only{width:32px;padding:0}
+  }
+  .rs-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 13px;
+    box-shadow:inset 0 0 0 1px var(--hair);color:var(--ink-2);font-family:'Martian Mono',monospace;
+    font-size:10px;letter-spacing:.14em;text-transform:uppercase;background:none;flex:none}
+  .rs-btn:hover{color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink-3)}
+  .rs-btn.icon-only{width:36px;padding:0}
+  .rs-btn .icon{width:15px;height:15px}
+
+  .rs-hero h1{font-size:clamp(34px,9vw,88px);font-weight:800;font-variation-settings:'wdth' 122;
+    text-transform:uppercase;letter-spacing:-.028em;line-height:.92}
+  /* One column, left-aligned. The sentence is clearly bigger than body copy so
+     it reads as part of the title block, and clearly smaller than the title so
+     it never competes with it. */
+  /* Wide enough to break onto two lines rather than three or four — the
+     sentence is the one piece of explanation above the map and should read as
+     a single held breath, not a paragraph. */
+  .rs-hero-line{margin-top:clamp(16px,2.4vw,22px);max-width:56ch;
+    font-size:clamp(17px,2.2vw,24px);line-height:1.35;font-weight:500;color:var(--ink-2);
+    letter-spacing:-.004em;text-wrap:balance}
+  .rs-hero-line b{color:var(--ink);font-weight:700}
+  .rs-hero-meta{margin-top:clamp(12px,1.6vw,16px);font-family:'Martian Mono',monospace;
+    font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);line-height:1.7}
+  /* Block, not flex: the label wraps to two lines on a phone, and as a flex
+     item that left the status dot stranded alone on the first line. */
+  .rs-source{margin-top:16px;font-family:'Martian Mono',monospace;font-size:9.5px;
+    letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);line-height:1.7}
+  .rs-source .rs-clear{margin-left:8px}
+  .rs-dot{width:6px;height:6px;border-radius:50%;background:var(--ink-3);
+    display:inline-block;vertical-align:middle;margin-right:7px}
+  .rs-dot.live{background:var(--line-c);animation:rs-pulse 2.4s ease-in-out infinite}
+  @keyframes rs-pulse{0%,100%{opacity:1}50%{opacity:.28}}
+  .rs-clear{font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-3);padding:3px 7px;box-shadow:inset 0 0 0 1px var(--hair);background:none}
+  .rs-clear:hover{color:var(--ink)}
+  .rs-flag{margin-top:14px;padding:10px 13px;box-shadow:inset 0 0 0 1px var(--line-m);
+    font-family:'Martian Mono',monospace;font-size:10px;line-height:1.6;color:var(--ink-2);letter-spacing:.04em}
+  .rs-flag b{color:var(--line-m)}
+
+  /* A read-out of the map above it, not a headline — deliberately smaller than
+     the hero-scale tiles these used to be. */
+  .rs-stats{margin-top:16px;display:grid;gap:1px;background:var(--hair);
+    grid-template-columns:repeat(2,1fr);box-shadow:0 0 0 1px var(--hair)}
+  @media(min-width:640px){.rs-stats{grid-template-columns:repeat(4,1fr)}}
+  .rs-stat{background:var(--bg);padding:12px 14px}
+  .rs-stat b{display:block;font-size:clamp(22px,3.4vw,30px);font-weight:800;line-height:1;
+    font-variation-settings:'wdth' 112;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .rs-stat span{display:block;margin-top:6px;font-family:'Martian Mono',monospace;font-size:8.5px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);line-height:1.4}
+  .rs-stat em{display:block;margin-top:2px;font-style:normal;font-family:'Martian Mono',monospace;
+    font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+
+  /* ---------- the map ---------- */
+  /* Tightened: the map follows the hero directly, so this section carries no
+     heading of its own — the hero already said what it is. */
+  #map{padding-top:clamp(22px,3.4vw,38px)}
+  .rs-mapcue{margin-bottom:10px;font-family:'Martian Mono',monospace;font-size:10px;
+    letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);line-height:1.6}
+  .rs-mapbox{position:relative;aspect-ratio:16/9;background:var(--bg-2);
+    box-shadow:inset 0 0 0 1px var(--hair)}
+  /* Taller on a phone: all 36 station names have to fit, and height is the
+     scarce dimension when the box is only ~360px across. */
+  @media(max-width:760px){.rs-mapbox{aspect-ratio:5/6}}
+  .rs-mapbox:fullscreen{aspect-ratio:auto;width:100%;height:100%}
+  .rs-mapbox canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:pointer}
+  #mapExpand{position:absolute;top:10px;right:10px;z-index:3;background:var(--panel);backdrop-filter:blur(8px)}
+  .rs-maplegend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:12px}
+  .rs-leg{display:flex;align-items:center;gap:7px;font-family:'Martian Mono',monospace;font-size:9.5px;
+    letter-spacing:.11em;text-transform:uppercase;color:var(--ink-2)}
+  .rs-leg i{width:14px;height:3px;display:block;flex:none}
+  .rs-leg b{color:var(--ink);font-weight:600;margin-left:auto}
+  .rs-maplegend{margin-top:14px}
+  .rs-readout{margin-top:12px;padding:11px 13px;box-shadow:inset 0 0 0 1px var(--hair);
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:44px;
+    font-family:'Martian Mono',monospace;font-size:10px;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--ink-2)}
+  .rs-readout b{font-weight:700;letter-spacing:.12em}
+
+  /* ---------- 3D promo card ----------
+     Lifted off the page rather than inverted against it. A hard white slab in
+     the dark theme was doing too much — it read as an advert dropped into the
+     piece. Built from the theme tokens now, so it is a quiet panel in both
+     themes and follows the toggle like everything else. */
+  .rs-3d{display:grid;grid-template-columns:1fr;margin-top:clamp(26px,4vw,40px);
+    background:var(--bg-2);color:var(--ink);text-decoration:none;overflow:hidden;
+    box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .18s}
+  .rs-3d:hover{box-shadow:inset 0 0 0 1px var(--ink-3)}
+  .rs-3d:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  @media(min-width:820px){.rs-3d{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);align-items:stretch}}
+  .rs-3d-media{display:block;position:relative;overflow:hidden;background:var(--bg);min-height:150px}
+  .rs-3d-media img{display:block;width:100%;height:100%;object-fit:cover;object-position:center}
+  .rs-3d-media .shot-light{display:none}
+  [data-theme="light"] .rs-3d-media .shot-dark{display:none}
+  [data-theme="light"] .rs-3d-media .shot-light{display:block}
+  .rs-3d-body{display:flex;flex-direction:column;align-items:flex-start;
+    padding:clamp(18px,2.6vw,28px);gap:10px}
+  .rs-3d-title{font-size:clamp(17px,2.4vw,23px);font-weight:800;font-variation-settings:'wdth' 118;
+    text-transform:uppercase;letter-spacing:-.012em;line-height:1.1}
+  .rs-3d-text{font-size:13.5px;line-height:1.6;color:var(--ink-2);max-width:44ch}
+  .rs-3d-cta{margin-top:4px;display:inline-flex;align-items:center;gap:8px;
+    padding:10px 15px;box-shadow:inset 0 0 0 1px var(--ink-3);color:var(--ink);
+    font-family:'Martian Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+  .rs-3d-cta em{font-style:normal;font-size:12px;line-height:1}
+  .rs-3d:hover .rs-3d-cta{background:var(--ink);color:var(--bg);box-shadow:none}
+  .rs-3d-note{font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-3);line-height:1.6}
+
+  /* ---------- bulletins: a full-bleed drifting strip ---------- */
+  /* Sits outside .rs so it can run the whole viewport width. The track drifts
+     on its own and stops the moment a pointer is over it, so nothing slides out
+     from under someone mid-read; on touch, dragging is the primary control and
+     the drift resumes a few seconds after they let go. */
+  /* This section lives outside .rs, so `.rs section{padding-top}` never reached
+     it and it butted straight up against the map. */
+  #bulletinsSection{padding-top:clamp(40px,7vw,76px)}
+  .rs-marquee{margin-top:18px;overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;cursor:grab}
+  .rs-marquee::-webkit-scrollbar{display:none}
+  .rs-marquee:active{cursor:grabbing}
+  .rs-marquee:focus-visible{outline:2px solid var(--ink-3);outline-offset:-2px}
+  /* Every card the same height — the row reads as one band rather than a
+     ragged stagger. Cards are flex columns so the grey sub-line pins to the
+     bottom edge of each one; without that, uniform height just means uneven
+     gaps of nothing under the shorter readings.
+     The left inset lines the first card up with the heading above it on wide
+     screens, while the strip still runs off the right edge — which is the part
+     that says "there is more this way". */
+  .rs-track{display:flex;align-items:stretch;gap:12px;width:max-content;
+    padding:2px var(--pad) 6px max(var(--pad), calc((100% - 1180px)/2 + var(--pad)))}
+  .rs-bulletin{flex:0 0 auto;width:min(78vw,340px);
+    display:flex;flex-direction:column;
+    padding:clamp(16px,2.4vw,20px);box-shadow:inset 0 0 0 1px var(--hair);
+    border-left:2px solid var(--accent,var(--ink-3));background:var(--bg);
+    -webkit-user-select:none;user-select:none}
+  .rs-bulletin .rs-bsub{margin-top:auto;padding-top:10px}
+  .rs-tag{display:inline-block;font-family:'Martian Mono',monospace;font-size:8.5px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--bg);background:var(--accent,var(--ink));padding:4px 7px 3px}
+  .rs-bline{margin-top:12px;font-size:clamp(17px,2.6vw,25px);line-height:1.18;font-weight:800;
+    font-variation-settings:'wdth' 116;letter-spacing:-.012em;text-transform:uppercase;text-wrap:balance}
+  .rs-bsub{margin-top:9px;font-family:'Martian Mono',monospace;font-size:9.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-3);line-height:1.5}
+  .rs-bulletin.has-path{cursor:pointer}
+  .rs-bulletin.has-path:hover{box-shadow:inset 0 0 0 1px var(--ink-3)}
+  .rs-bulletin.has-path:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  /* An illustrated reading gets a WIDER card, not a taller one. The strip is as
+     tall as its tallest card, so stacking a thumbnail under the text pushed the
+     whole section to ~440px and left the ordinary two-line readings floating in
+     200px of nothing. Side by side, every card lands near the same height and
+     the mixed widths are what makes the row read as a collage.
+     On a phone one card fills the screen, so there is no width to spend — the
+     thumbnail goes away and the route stays in the card's sub-line. */
+  .rs-bthumb{display:none;position:relative;background:var(--bg-2);
+    overflow:hidden;box-shadow:inset 0 0 0 1px var(--hair)}
+  @media(min-width:760px){
+    .rs-bthumb{display:block;aspect-ratio:1.15}
+    .rs-bulletin.has-path{width:min(88vw,540px);display:grid;
+      grid-template-columns:minmax(0,1fr) 190px;grid-template-rows:auto auto 1fr;
+      column-gap:16px;align-items:start}
+    .rs-bulletin.has-path .rs-tag{grid-column:1;grid-row:1;justify-self:start}
+    .rs-bulletin.has-path .rs-bline{grid-column:1;grid-row:2}
+    .rs-bulletin.has-path .rs-bsub{grid-column:1;grid-row:3;margin-top:0;align-self:end}
+    .rs-bulletin.has-path .rs-bthumb{grid-column:2;grid-row:1/4;align-self:stretch;aspect-ratio:auto}
+  }
+  .rs-bthumb canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+  /* ---------- charts ---------- */
+  .rs-cols{display:grid;gap:clamp(26px,4vw,44px);grid-template-columns:1fr}
+  @media(min-width:900px){.rs-cols{grid-template-columns:1.15fr 1fr}}
+  .rs-block h3{font-size:12px;font-weight:700;letter-spacing:.03em;font-variation-settings:'wdth' 116;
+    text-transform:uppercase;padding-bottom:9px;border-bottom:1px solid var(--hair);
+    display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .rs-block h3 small{font-family:'Martian Mono',monospace;font-size:9px;font-weight:400;
+    letter-spacing:.14em;color:var(--ink-3);text-transform:uppercase}
+  .rs-block + .rs-block{margin-top:clamp(26px,4vw,40px)}
+  /* All 36 stations, no inner scroller. A nested scroll region inside a
+     scrolling page is a trap for the thumb and the scrollbar was the loudest
+     thing in the section; with the runs list added to the right-hand column
+     there is enough height to let the full list stand. */
+  #traffic{margin-top:4px}
+
+  .rs-row{display:grid;grid-template-columns:minmax(0,1fr) 34% 34px;align-items:center;gap:10px;width:100%;
+    padding:6px 4px;background:none;text-align:left;font-family:'Martian Mono',monospace;font-size:10px;
+    letter-spacing:.05em;color:var(--ink-2);border-bottom:1px solid transparent}
+  @media(max-width:520px){.rs-row{grid-template-columns:minmax(0,1fr) 26% 30px;gap:7px;font-size:9.5px}}
+  .rs-row:not(.static){cursor:pointer}
+  .rs-row:not(.static):hover{color:var(--ink);background:rgba(127,127,127,.07)}
+  .rs-row.on{color:var(--ink);background:rgba(127,127,127,.13);box-shadow:inset 2px 0 0 var(--ink)}
+  .rs-row.zero{opacity:.42}
+  .rs-rname{display:flex;align-items:center;gap:7px;min-width:0;text-transform:uppercase;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rs-rname i{width:6px;height:6px;border-radius:50%;flex:none}
+  .rs-rname em{font-style:normal;color:var(--ink-3);margin:0 5px;flex:none}
+  .rs-rbar{display:block;height:6px;background:var(--hair);position:relative;overflow:hidden}
+  .rs-rbar i{position:absolute;inset:0 auto 0 0;display:block;min-width:1px}
+  .rs-rval{text-align:right;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+
+  /* A run is three station names, so it gets its own row shape: the names take
+     the width and are allowed to wrap, and the bar shrinks to a marker. The
+     single-line ellipsis the two-station rows use would cut "VULNERABILITY ›
+     ADAPTATION › RESILIENCE" down to the first word on a phone. */
+  .rs-triple{display:grid;grid-template-columns:minmax(0,1fr) 54px 26px;align-items:center;
+    gap:10px;padding:7px 4px;font-family:'Martian Mono',monospace;font-size:9.5px;
+    letter-spacing:.05em}
+  /* The names are joined with real spaces, so ordinary wrapping breaks between
+     stations. Only a single name too wide for the column ever splits. */
+  .rs-trun{min-width:0;text-transform:uppercase;line-height:1.5;overflow-wrap:break-word}
+  .rs-trun b{font-weight:600;white-space:nowrap}
+  .rs-trun em{font-style:normal;color:var(--ink-3)}
+  .rs-triple .rs-rval{color:var(--ink);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+
+  /* Compact variant of the search selects, for use inside a chart block. */
+  .rs-select-sm{margin-top:12px;max-width:260px}
+  .rs-select-sm select{height:34px;font-size:9.5px;padding:0 24px 0 10px}
+
+  .rs-endsbar{display:flex;height:26px;margin-top:14px;background:var(--hair);overflow:hidden}
+  .rs-endsbar i{display:block;height:100%}
+  .rs-endslegend{margin-top:12px;display:grid;gap:7px}
+  .rs-endslegend .rs-leg i{width:10px;height:10px;border-radius:50%}
+  .rs-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+  .rs-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;box-shadow:inset 0 0 0 1px var(--hair);
+    font-family:'Martian Mono',monospace;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+  .rs-pill i{width:6px;height:6px;border-radius:50%;opacity:.5}
+
+  /* ---------- the browser ---------- */
+  .rs-searchbar{position:sticky;top:0;z-index:20;background:var(--bg);
+    padding:12px 0;margin-bottom:14px;border-bottom:1px solid var(--hair)}
+  .rs-searchrow{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
+  .rs-field{flex:1 1 240px;min-width:0;position:relative;display:flex;align-items:center}
+  .rs-field input{width:100%;height:44px;padding:0 40px 0 14px;background:var(--bg-2);color:var(--ink);
+    border:none;box-shadow:inset 0 0 0 1px var(--hair);font-family:'Martian Mono',monospace;
+    font-size:12px;letter-spacing:.04em;-webkit-appearance:none;border-radius:0}
+  .rs-field input::placeholder{color:var(--ink-3);text-transform:none}
+  .rs-field input:focus{outline:none;box-shadow:inset 0 0 0 1px var(--ink-3)}
+  #searchClear{position:absolute;right:6px;width:30px;height:30px;display:flex;align-items:center;
+    justify-content:center;color:var(--ink-3);font-family:'Martian Mono',monospace;font-size:15px;background:none}
+  #searchClear:hover{color:var(--ink)}
+  .rs-selects{display:flex;gap:8px;flex:1 1 260px}
+  .rs-select{position:relative;flex:1;min-width:0}
+  .rs-select select{width:100%;height:44px;padding:0 26px 0 12px;background:var(--bg-2);color:var(--ink-2);
+    border:none;box-shadow:inset 0 0 0 1px var(--hair);font-family:'Martian Mono',monospace;font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;-webkit-appearance:none;appearance:none;border-radius:0;cursor:pointer}
+  .rs-select::after{content:"";position:absolute;right:11px;top:50%;width:6px;height:6px;pointer-events:none;
+    border-right:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3);transform:translateY(-75%) rotate(45deg)}
+  .rs-select select:focus{outline:none;color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink-3)}
+  .rs-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .rs-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;box-shadow:inset 0 0 0 1px var(--hair);
+    font-family:'Martian Mono',monospace;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
+    color:var(--ink-2);background:none}
+  .rs-chip i{width:6px;height:6px;border-radius:50%;background:var(--dot,var(--ink-3));flex:none}
+  .rs-chip em{font-style:normal;color:inherit;opacity:.6}
+  .rs-chip:hover{color:var(--ink)}
+  .rs-chip.on{background:var(--ink);color:var(--bg);box-shadow:none}
+  .rs-hint{margin-top:9px;font-family:'Martian Mono',monospace;font-size:9.5px;letter-spacing:.06em;
+    color:var(--ink-3);line-height:1.6;max-width:78ch}
+  .rs-hint b{color:var(--ink-2);font-weight:600}
+  /* Contextual match-mode row — position chips for a single station, order
+     chips for a chained route. */
+  .rs-modes{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:9px}
+  .rs-modelabel{font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--ink-3);flex:none;padding-top:2px}
+  .rs-modes .rs-chips{margin-top:0;flex:1 1 auto}
+  .rs-modelabel{max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rs-modeselect{margin-top:0;flex:0 1 240px;min-width:170px}
+
+  .rs-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(148px,1fr))}
+  @media(min-width:720px){.rs-grid{grid-template-columns:repeat(auto-fill,minmax(206px,1fr));gap:12px}}
+  .rs-card{display:flex;flex-direction:column;text-align:left;background:none;padding:0;
+    box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .15s}
+  .rs-card:hover{box-shadow:inset 0 0 0 1px var(--ink-3)}
+  .rs-thumb{display:block;position:relative;aspect-ratio:1.35;background:var(--bg-2);overflow:hidden}
+  .rs-thumb canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .rs-cmeta{display:block;padding:9px 11px 11px}
+  /* Two lines rather than an ellipsis: on a phone the grid cell is ~165px and
+     almost every route would otherwise end in "RESILIE…", which is exactly the
+     word someone scanning for their own path needs to read. */
+  .rs-croute{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+    font-family:'Martian Mono',monospace;font-size:9.5px;font-weight:600;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--ink);line-height:1.45;
+    overflow:hidden;overflow-wrap:anywhere}
+  .rs-csub{display:block;margin-top:4px;font-family:'Martian Mono',monospace;font-size:9px;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+  .rs-csub em{font-style:normal;padding:1px 4px;background:var(--hair);color:var(--ink-3);letter-spacing:.12em}
+  .rs-empty{grid-column:1/-1;padding:56px 18px;text-align:center;font-family:'Martian Mono',monospace;
+    font-size:11px;line-height:1.8;color:var(--ink-2)}
+  .rs-more{margin-top:18px;display:flex;align-items:center;justify-content:center;gap:12px}
+
+  /* ---------- lightbox ---------- */
+  .rs-veil{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.72);opacity:0;pointer-events:none;
+    transition:opacity .22s var(--ease);display:flex;align-items:center;justify-content:center;padding:16px}
+  .rs-veil.on{opacity:1;pointer-events:auto}
+  .rs-modal{position:relative;width:min(620px,100%);max-height:calc(100dvh - 32px);display:flex;
+    flex-direction:column;background:var(--bg);box-shadow:0 0 0 1px var(--hair),0 30px 80px rgba(0,0,0,.55)}
+  .rs-modal-body{overflow-y:auto;overscroll-behavior:contain;padding:20px 20px 4px}
+  .rs-modal h3{font-size:clamp(17px,3.4vw,23px);font-weight:800;font-variation-settings:'wdth' 118;
+    text-transform:uppercase;line-height:1.1;padding-right:44px}
+  .rs-modal .rs-when{margin-top:6px;font-family:'Martian Mono',monospace;font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+  .rs-const{position:relative;margin-top:16px;height:min(42vh,320px);background:var(--bg-2);
+    box-shadow:inset 0 0 0 1px var(--hair)}
+  .rs-const canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .rs-facts{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+  .rs-facts span{font-family:'Martian Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-3);padding:5px 9px;box-shadow:inset 0 0 0 1px var(--hair)}
+  .rs-facts .jcode{color:var(--ink);font-weight:700;letter-spacing:.14em;
+    box-shadow:inset 0 0 0 1px var(--ink-3)}
+  .rs-stops{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;padding-bottom:18px}
+  .rs-stops span{display:inline-flex;align-items:center;gap:6px;font-family:'Martian Mono',monospace;
+    font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;box-shadow:inset 0 0 0 1px var(--hair)}
+  .rs-stops i{width:7px;height:7px;border-radius:50%;flex:none}
+  #jClose{position:absolute;top:10px;right:10px;z-index:4;width:36px;height:36px;display:inline-flex;
+    align-items:center;justify-content:center;color:var(--ink-3);box-shadow:inset 0 0 0 1px var(--hair);background:var(--bg)}
+  #jClose:hover{color:var(--ink)}
+  #jClose .icon{width:15px;height:15px}
+
+  /* ---------- share ---------- */
+  .rs-qrpanel{background:#fff;padding:20px;display:flex;flex-direction:column;align-items:center;gap:14px;
+    max-width:min(340px,92vw)}
+  .rs-qrpanel canvas{display:block}
+  .rs-qrpanel .cap{font-family:'Martian Mono',monospace;font-size:9.5px;color:#333;letter-spacing:.06em;
+    text-align:center;word-break:break-all;line-height:1.6}
+  .rs-qrpanel button{width:100%;height:40px;background:#111;color:#fff;font-family:'Martian Mono',monospace;
+    font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+
+  /* ---------- how it worked ---------- */
+  .rs-how{display:grid;gap:clamp(20px,3vw,34px);grid-template-columns:1fr}
+  @media(min-width:820px){.rs-how{grid-template-columns:repeat(3,1fr)}}
+  .rs-how h3{font-size:12px;font-weight:700;letter-spacing:.03em;font-variation-settings:'wdth' 116;
+    text-transform:uppercase;padding-bottom:9px;border-bottom:1px solid var(--hair);margin-bottom:12px}
+  .rs-how p{font-size:14px;line-height:1.65;color:var(--ink-2)}
+
+  /* ---------- station-filter toast ---------- */
+  .rs-toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(8px);z-index:70;
+    display:flex;align-items:center;gap:10px;padding:10px 12px;max-width:calc(100vw - 24px);
+    background:var(--panel);backdrop-filter:blur(12px);box-shadow:0 0 0 1px var(--hair),0 14px 40px rgba(0,0,0,.45);
+    font-family:'Martian Mono',monospace;font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-2);opacity:0;pointer-events:none;transition:opacity .22s var(--ease),transform .22s var(--ease)}
+  .rs-toast.on{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+  .rs-toast b{color:var(--ink);font-weight:700}
+  .rs-toast #toastGo{flex:none;padding:6px 9px;background:var(--ink);color:var(--bg);
+    font:inherit;letter-spacing:.12em;text-transform:uppercase}
+  .rs-toast #toastClose{flex:none;width:24px;height:24px;color:var(--ink-3);font-size:15px;
+    line-height:1;background:none}
+  .rs-toast #toastClose:hover{color:var(--ink)}
+
+  /* ---------- footer ---------- */
+  .rs-foot{margin-top:clamp(50px,8vw,90px);padding-top:24px;border-top:1px solid var(--hair)}
+
+  /* ---------- loading ---------- */
+  #loading{min-height:70vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
+  #loading .rs-load{font-family:'Martian Mono',monospace;font-size:11px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--ink-3)}
+  #loading .rs-load::after{content:"";animation:rs-ell 1.4s steps(4,end) infinite}
+  @keyframes rs-ell{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+</style>
+</head>
+<body>
+
+<div id="loading"><p class="rs-load">Reading the map</p></div>
+
+<div id="page" hidden>
+
+ <div class="rs">
+  <!-- ============ hero ============
+       Title, one sentence, the event line — and then the map. Everything about
+       how the piece worked has moved to "How it worked" at the foot of the
+       page: the visualisation is the answer, and it should not be arrived at
+       through three paragraphs of preamble. -->
+  <header class="rs-hero">
+    <!-- Title and actions share the top line: the buttons used to sit in a row
+         of their own above the title, which pushed the whole page down and put
+         two small controls in the most prominent position on it. -->
+    <div class="rs-herotop">
+      <h1>The Mood<br>Topography</h1>
+      <div class="rs-actions">
+        <button class="rs-btn" type="button" id="shareBtn">Share</button>
+        <button class="rs-btn icon-only" type="button" id="themeBtn" aria-label="Toggle theme"></button>
+      </div>
+    </div>
+    <p class="rs-hero-line" id="heroLine"></p>
+    <p class="rs-hero-meta" id="eventLine"></p>
+
+    <div class="rs-flag" id="rehearsalNote" hidden>
+      <b>Preview mode.</b> Showing rehearsal paths (<code>?demo=1</code>). Drop the parameter for the public view.
+    </div>
+  </header>
+
+  <!-- ============ the map ============ -->
+  <section id="map">
+    <p class="rs-mapcue">Select any station to reveal the journeys that passed through it.</p>
+    <div class="rs-mapbox" id="mapBox">
+      <canvas id="mapCanvas"></canvas>
+      <button class="rs-btn icon-only" type="button" id="mapExpand" aria-label="Expand map"></button>
+    </div>
+    <!-- Only present once a station is chosen; the standing instruction lives
+         above the map so it is read before anyone reaches for it. -->
+    <div class="rs-readout" id="mapReadout" hidden></div>
+
+    <div class="rs-stats" id="stats"></div>
+    <div class="rs-maplegend">
+      <div class="rs-leg"><i style="background:var(--line-f)"></i>Friction &amp; Resistance</div>
+      <div class="rs-leg"><i style="background:var(--line-r)"></i>Foundations &amp; Reflection</div>
+      <div class="rs-leg"><i style="background:var(--line-c)"></i>Connection &amp; Empathy</div>
+      <div class="rs-leg"><i style="background:var(--line-m)"></i>Momentum &amp; Vision</div>
+    </div>
+    <div class="rs-source" id="source"></div>
+
+    <!-- 3D promo. A static preview, deliberately not an iframe: that page runs
+         its own canvas pipeline and embedding it would spin up a second animated
+         renderer inside a page that already has one. No preload / prefetch on the
+         link for the same reason — nothing about it should cost anything until
+         someone asks for it. The whole card is the link; the button is there
+         because a card that only looks clickable often isn't tried. -->
+    <a class="rs-3d" href="landscape.html" target="_blank" rel="noopener noreferrer">
+      <!-- Two captures, one per theme, swapped in CSS — a preview showing the
+           opposite palette to the page it sits on advertises the wrong thing.
+           Both are lazy, and a display:none lazy image is not fetched, so only
+           the one in use costs anything. -->
+      <span class="rs-3d-media">
+        <img class="shot-dark" src="assets/landscape-preview.webp"
+             alt="The same map rendered in three dimensions, stations rising as columns above a grid"
+             width="1400" height="488" loading="lazy" decoding="async">
+        <img class="shot-light" src="assets/landscape-preview-light.webp"
+             alt="" aria-hidden="true"
+             width="1400" height="488" loading="lazy" decoding="async">
+      </span>
+      <span class="rs-3d-body">
+        <span class="rs-3d-title">Explore the map in 3D</span>
+        <span class="rs-3d-text">See the emotional landscape from another perspective. Rotate, zoom,
+          and explore the connections in three dimensions.</span>
+        <span class="rs-3d-cta">Open 3D visualization <em>&#8599;</em></span>
+        <span class="rs-3d-note">Opens in a new tab &middot; Best experienced on desktop</span>
+      </span>
+    </a>
+  </section>
+ </div>
+
+ <!-- ============ bulletins — full-bleed drifting strip ============ -->
+ <section id="bulletinsSection">
+   <div class="rs">
+     <div class="rs-head">
+       <div>
+         <h2>What the map found</h2>
+         <p class="rs-sub">The same readings the wall spoke through the night, drawn from the finished set.
+           <span class="rs-dim">Drag to browse.</span></p>
+       </div>
+     </div>
+   </div>
+   <div class="rs-marquee" id="marquee" tabindex="0" role="region" aria-label="Readings from the map, scroll horizontally">
+     <div class="rs-track" id="bulletins"></div>
+   </div>
+ </section>
+
+ <div class="rs rs-tail">
+  <!-- ============ the browser ============ -->
+  <section id="browser">
+    <div class="rs-head">
+      <div>
+        <h2>Every journey</h2>
+        <p class="rs-sub">Find a station, a route, or your own path.</p>
+      </div>
+      <span class="rs-count" id="resultCount"></span>
+    </div>
+
+    <div class="rs-searchbar">
+      <div class="rs-searchrow">
+        <div class="rs-field">
+          <input id="search" type="search" autocomplete="off" spellcheck="false"
+                 placeholder="MT-4ISJWX · or Fear · or Fear › Hope" aria-label="Search journeys">
+          <button type="button" id="searchClear" aria-label="Clear search">&times;</button>
+        </div>
+        <div class="rs-selects">
+          <div class="rs-select">
+            <select id="lenSelect" aria-label="Filter by shape">
+              <option value="all">Any length</option>
+              <option value="short">3–4 stations</option>
+              <option value="mid">5–7 stations</option>
+              <option value="long">8–10 stations</option>
+              <option value="fourline">Crosses all four lines</option>
+              <option value="unique">Route nobody repeated</option>
+            </select>
+          </div>
+          <div class="rs-select">
+            <select id="sortSelect" aria-label="Sort">
+              <option value="new">Newest first</option>
+              <option value="old">Oldest first</option>
+              <option value="longest">Longest first</option>
+              <option value="shortest">Shortest first</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="rs-modes" id="modeRow" hidden>
+        <span class="rs-modelabel" id="modeLabel"></span>
+        <span class="rs-chips" id="modeChips" hidden></span>
+        <span class="rs-select rs-select-sm rs-modeselect" id="modeSelectWrap" hidden>
+          <select id="posMode" aria-label="The part this station played in the journey"></select>
+        </span>
+      </div>
+      <p class="rs-hint" id="searchNote"></p>
+      <div class="rs-chips" id="famChips"></div>
+      <div class="rs-chips" id="activeFilters"></div>
+    </div>
+
+    <div class="rs-grid" id="grid"></div>
+    <div class="rs-more" id="moreWrap" hidden>
+      <button class="rs-btn" type="button" id="moreBtn">Show more</button>
+      <span class="rs-count" id="moreRemaining"></span>
+    </div>
+  </section>
+
+  <!-- ============ charts ============ -->
+  <section id="numbers">
+    <div class="rs-head">
+      <div>
+        <h2>The night in numbers</h2>
+        <p class="rs-sub">Tap a station to filter the journeys above to the ones that crossed it.</p>
+      </div>
+    </div>
+    <div class="rs-cols">
+      <div class="rs-block">
+        <h3>Station traffic <small>journeys crossing</small></h3>
+        <div id="traffic"></div>
+      </div>
+      <div>
+        <div class="rs-block">
+          <h3>Where journeys ended <small>by line</small></h3>
+          <div class="rs-endsbar" id="endsBar"></div>
+          <div class="rs-endslegend" id="endsLegend"></div>
+        </div>
+        <div class="rs-block">
+          <h3>Most-walked segments <small>two in a row · top 10</small></h3>
+          <div id="links"></div>
+        </div>
+        <div class="rs-block">
+          <h3>Most-walked runs <small id="triplesCount">three in a row</small></h3>
+          <div id="triples"></div>
+        </div>
+        <div class="rs-block">
+          <h3>Never used <small id="neverCount"></small></h3>
+          <div class="rs-select rs-select-sm">
+            <select id="neverMode" aria-label="Which role a station was never used in">
+              <option value="any">Never visited at all</option>
+              <option value="first">Never a starting point</option>
+              <option value="last">Never a destination</option>
+              <option value="mid">Never a connection</option>
+            </select>
+          </div>
+          <div class="rs-pills" id="untouched"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ how it worked ============
+       The explanation the hero used to carry, moved to the end where someone
+       who has already looked at the map can come to it wanting the detail. -->
+  <section id="how">
+    <div class="rs-head">
+      <div>
+        <h2>How it worked</h2>
+        <p class="rs-sub">The piece, the interaction, and what the map is made of.</p>
+      </div>
+    </div>
+    <div class="rs-how">
+      <div>
+        <h3>The field</h3>
+        <p>Thirty-six emotional states, grouped into four lines — Friction &amp; Resistance,
+          Foundations &amp; Reflection, Connection &amp; Empathy, and Momentum &amp; Vision.
+          The layout is a transit map: related states sit near each other, and each line holds
+          its own region of the field.</p>
+      </div>
+      <div>
+        <h3>The interaction</h3>
+        <p>Each visitor stepped up to a tablet and anchored themselves at one station, then
+          traced a path through the others — where they had come from, where they were going,
+          what they had to cross to get there. Three stops minimum, ten at most. There were no
+          right answers and no shared route, and everyone left with their own path as a
+          keepsake.</p>
+      </div>
+      <div>
+        <h3>The collective map</h3>
+        <p>Every path joined a public projection the moment it was cast, and the wall read
+          aloud what it found in the accumulating map — the heaviest link, the busiest
+          interchange, the station nobody went near. No single journey says much. Laid over
+          each other, they start to describe a civic mood: what people find hard, what they
+          hold onto, and where they think they are heading.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ footer ============ -->
+  <footer class="rs-foot">
+    <div class="credits">
+      <div class="row"><b>The Mood Topography</b><span>Democracy Week · Tel Aviv · 2026</span></div>
+      <div class="row"><span>Cast at Teder</span><span id="footWhen"></span></div>
+      <a class="row row-link" href="https://www.instagram.com/unapaulogetic_" target="_blank" rel="noopener">
+        <span>Made by <b>@unapaulogetic_</b></span>
+        <span>instagram.com/unapaulogetic_ →</span>
+      </a>
+    </div>
+  </footer>
+ </div>
+</div>
+
+<!-- Station-filter notice. Clicking a station used to yank the page down to the
+     grid; this says what happened and lets the reader choose to go. -->
+<div class="rs-toast" id="filterToast" hidden>
+  <span id="toastText"></span>
+  <button type="button" id="toastGo">See them</button>
+  <button type="button" id="toastClose" aria-label="Dismiss">&times;</button>
+</div>
+
+<!-- ============ journey lightbox ============ -->
+<div class="rs-veil" id="jModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="jTitle">
+  <div class="rs-modal">
+    <button type="button" id="jClose" aria-label="Close"></button>
+    <div class="rs-modal-body">
+      <h3 id="jTitle"></h3>
+      <p class="rs-when" id="jWhen"></p>
+      <div class="rs-const"><canvas id="jCanvas"></canvas></div>
+      <div class="rs-facts" id="jFacts"></div>
+      <div class="rs-stops" id="jStops"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ share ============ -->
+<div class="rs-veil" id="shareVeil">
+  <div class="rs-qrpanel" onclick="event.stopPropagation()">
+    <canvas id="shareQR"></canvas>
+    <div class="cap" id="shareURL"></div>
+    <button type="button" id="copyBtn">Copy link</button>
+  </div>
+</div>
+
+<script>
+  /* Read-only stand-in for store.js. core.js's analyse() memoises against
+     Store.version; nothing else on this page touches Store, and no sync
+     transport is loaded, so the page can never write back to the show. */
+  window.Store = { version: 0, paths: [], theme: "dark", filter: { type: "all" } };
+</script>
+<script src="assets/icons.js?v=20260817-fin1"></script>
+<script src="assets/core.js?v=20260817-fin1"></script>
+<script src="assets/qrcode.min.js?v=20260817-fin1"></script>
+<script src="assets/results.js?v=20260817-fin1"></script>
+</body>
+</html>

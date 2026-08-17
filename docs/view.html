@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>The Mood Topography — Your constellation</title>
-<link rel="stylesheet" href="assets/style.css?v=20260815-fa97ad3f">
+<link rel="stylesheet" href="assets/style.css?v=20260817-fin1">
 <style>
   html,body{overflow:auto}
   .viewer{min-height:100vh;display:flex;flex-direction:column;padding:22px;gap:14px;max-width:640px;margin:0 auto}
@@ -42,18 +42,14 @@
     font-size:11px;line-height:1.7}
   .empty a{color:var(--ink);text-decoration:underline}
 
-  /* QR overlay — click Show QR to reveal a big, hold-up-to-someone-else QR
-     encoding this page's URL. Clicking anywhere closes it. */
-  .qr-veil{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.75);
-    display:flex;align-items:center;justify-content:center;padding:32px;
-    opacity:0;pointer-events:none;transition:opacity .2s var(--ease)}
-  .qr-veil.on{opacity:1;pointer-events:auto}
-  .qr-panel{background:#fff;padding:20px;box-shadow:0 30px 80px rgba(0,0,0,.5);
-    display:flex;flex-direction:column;align-items:center;gap:12px;max-width:min(360px,90vw)}
-  .qr-panel canvas{display:block}
-  .qr-panel .qr-cap{font-family:'Martian Mono',monospace;font-size:9.5px;color:#333;
-    letter-spacing:.08em;text-align:center;word-break:break-all;line-height:1.5}
-  .qr-panel .qr-cap b{color:#111}
+  /* The path code, on screen. Boxed and letter-spaced so it can be read off a
+     laptop at arm's length and typed into the results page. */
+  .viewcode{display:inline-flex;flex-direction:column;gap:3px;padding:9px 13px;
+    box-shadow:inset 0 0 0 1px var(--hair);align-self:flex-start}
+  .viewcode-label{font-family:'Martian Mono',monospace;font-size:8.5px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--ink-3)}
+  .viewcode b{font-family:'Martian Mono',monospace;font-size:17px;font-weight:700;
+    letter-spacing:.16em;color:var(--ink);line-height:1.1}
 
   /* --- Print: thermal receipt layout for view.html (used by archive.html's
      Print button which navigates here with ?print=1 and auto-fires window.print).
@@ -64,7 +60,7 @@
     body *{visibility:hidden}
     .viewer{padding:0!important;max-width:none!important;margin:0!important;display:block!important;min-height:0!important}
     .viewer *{visibility:visible;color:#000!important}
-    .viewer .head-actions, .viewer .hint, .qr-veil{display:none!important}
+    .viewer .head-actions, .viewer .hint, .viewcode{display:none!important}
     .viewer header{display:block!important;text-align:center;padding:0!important;margin:0 0 2mm 0!important;border:none!important}
     /* Matches the cast receipt's title exactly — same size, weight and case,
        so a reprint from the archive is indistinguishable from the original. */
@@ -78,10 +74,21 @@
       width:100%!important;height:auto!important;inset:auto!important}
     .viewer .const img{display:none!important}
     .viewer .stops{display:none!important}
-    /* QR, matching the cast receipt's 32mm block. */
-    .print-qr{display:block!important;margin:2mm 0!important;text-align:center}
-    .print-qr canvas{display:block!important;width:32mm!important;height:32mm!important;
-      margin:0 auto!important;background:#fff!important}
+    /* Call to action, matching the cast receipt exactly. */
+    .print-qr{display:block!important;margin:3.5mm 0 0!important;text-align:center;
+      border-top:1px dashed #000;padding-top:2.5mm}
+    .print-cta{font-family:'Martian Mono',monospace;font-size:8pt;font-weight:700;
+      letter-spacing:.14em;text-transform:uppercase}
+    .print-qr canvas{display:block!important;width:30mm!important;height:30mm!important;
+      margin:1.8mm auto 0!important;background:#fff!important}
+    .print-code{display:block;margin:3mm auto 0;padding:1.5mm 2mm;
+      border:1px solid #000;width:fit-content}
+    .print-code span{display:block;font-family:'Martian Mono',monospace;font-size:6pt;
+      letter-spacing:.16em;text-transform:uppercase}
+    .print-code b{display:block;font-family:'Martian Mono',monospace;font-size:13pt;
+      font-weight:700;letter-spacing:.16em;margin-top:.6mm}
+    .print-codehint{margin-top:1.6mm;font-family:'Martian Mono',monospace;font-size:6.5pt;
+      line-height:1.35}
     /* The screen credits are suppressed entirely in print; .print-credits
        (shared rules in style.css) carries the receipt version instead, so the
        kiosk and the archive emit byte-identical footers. */
@@ -99,7 +106,6 @@
     </div>
     <div class="head-actions" id="headActions">
       <button class="head-btn" id="themeBtn" type="button" title="Toggle light / dark" aria-label="Toggle theme"></button>
-      <button class="head-btn" id="qrBtn"    type="button" title="Show QR to share" aria-label="Show QR"></button>
       <button class="head-btn" id="printBtn" type="button" title="Print this constellation" aria-label="Print"></button>
     </div>
   </header>
@@ -107,12 +113,28 @@
     <canvas id="star" aria-hidden="true"></canvas>
     <img id="starImg" alt="Your constellation">
   </div>
-  <!-- Print-only QR. The cast receipt carries one, so a reprint from the
-       archive has to as well or the two receipts don't match. Hidden on
-       screen, where the QR lives behind the Share button instead. -->
-  <div class="print-qr" id="printQRWrap" aria-hidden="true"><canvas id="printQR"></canvas></div>
+  <!-- Print-only call to action. A reprint out of the archive has to match the
+       receipt the kiosk handed over, so this carries the same three things:
+       heading, QR to the results page, path code. Hidden on screen, where the
+       QR lives behind the Share button instead. -->
+  <div class="print-qr" id="printQRWrap" aria-hidden="true">
+    <div class="print-cta">See the whole map</div>
+    <canvas id="printQR"></canvas>
+    <div class="print-code">
+      <span>Your path code</span>
+      <b id="printCode"></b>
+    </div>
+    <p class="print-codehint">Enter it under &ldquo;Every journey&rdquo; to find your route again.</p>
+  </div>
+  <!-- The code, not a QR and not a URL. This page is reached from the archive
+       now, so what an operator wants off it is the string they can read out or
+       type into the results page — not something to scan. -->
+  <div class="viewcode">
+    <span class="viewcode-label">Path code</span>
+    <b id="viewCode"></b>
+  </div>
   <div class="stops" id="stops"></div>
-  <p class="hint" id="hint"><b>Long-press the image to save it.</b> This link stays live — you can come back to it, share it, or open it on another device.</p>
+  <p class="hint" id="hint"><b>Long-press the image to save it.</b></p>
   <div class="credits">
     <div class="row"><b>The Mood Topography</b><span>Democracy Week · Tel Aviv · 2026</span></div>
     <div class="row"><span>Cast at Teder</span><span id="castDate"></span></div>
@@ -133,18 +155,11 @@
   </div>
 </div>
 
-<div class="qr-veil" id="qrVeil">
-  <div class="qr-panel">
-    <canvas id="shareQR"></canvas>
-    <div class="qr-cap"><b>Scan to open this constellation</b><br><span id="shareURL"></span></div>
-  </div>
-</div>
-
-<script src="assets/icons.js?v=20260815-fa97ad3f"></script>
-<script src="assets/remote-config.js?v=20260815-fa97ad3f"></script>
-<script src="assets/store.js?v=20260815-fa97ad3f"></script>
-<script src="assets/core.js?v=20260815-fa97ad3f"></script>
-<script src="assets/qrcode.min.js?v=20260815-fa97ad3f"></script>
+<script src="assets/icons.js?v=20260817-fin1"></script>
+<script src="assets/remote-config.js?v=20260817-fin1"></script>
+<script src="assets/store.js?v=20260817-fin1"></script>
+<script src="assets/core.js?v=20260817-fin1"></script>
+<script src="assets/qrcode.min.js?v=20260817-fin1"></script>
 <script>
 "use strict";
 const wrap=document.getElementById("wrap");
@@ -152,15 +167,10 @@ const star=document.getElementById("star");
 const stops=document.getElementById("stops");
 const title=document.getElementById("title");
 const themeBtn=document.getElementById("themeBtn");
-const qrBtn   =document.getElementById("qrBtn");
 const printBtn=document.getElementById("printBtn");
-const qrVeil  =document.getElementById("qrVeil");
-const shareQR =document.getElementById("shareQR");
-const shareURL=document.getElementById("shareURL");
 
 // Ice the icons in before anything else touches the buttons.
 themeBtn.innerHTML = Icons.theme;
-qrBtn.innerHTML    = Icons.qr;
 printBtn.innerHTML = Icons.print;
 
 // Theme here is PURELY LOCAL to this page and this device.
@@ -196,8 +206,12 @@ if(!ids.length){
   // Same wording as the cast receipt so a reprint out of the archive matches
   // the original slip the participant was handed.
   title.textContent = "Your path";
-  // Print-only QR pointing back at this very page.
-  renderQR(document.getElementById("printQR"), location.href, 150);
+  // Print-only QR — points at the results page with this path already found,
+  // matching what the kiosk prints. Built from PUBLIC_BASE, not location.href:
+  // an archive reprint may well be running off a laptop's LAN address.
+  renderQR(document.getElementById("printQR"), resultsURLFor(ids), 150);
+  document.getElementById("printCode").textContent = pathCode(ids);
+  document.getElementById("viewCode").textContent = pathCode(ids);
   const paintStops = () => {
     stops.innerHTML = ids.map((id,i)=>{
       const n=NODES[id];
@@ -253,19 +267,6 @@ if(!ids.length){
       else requestAnimationFrame(drawScreen);
     });
   }catch(_){}
-
-  // QR overlay — encodes this page's URL so the participant can hold their
-  // phone up and let someone else's phone scan the constellation without
-  // needing to type or share a link.
-  function openQR(){
-    const url = location.href;
-    renderQR(shareQR, url, 220);
-    shareURL.textContent = url;
-    qrVeil.classList.add("on");
-  }
-  function closeQR(){ qrVeil.classList.remove("on") }
-  qrBtn.onclick = openQR;
-  qrVeil.addEventListener("click", closeQR);
 
   // ?print=1 (used by the Archive page's print button) auto-opens the browser
   // print dialog after the constellation has had a beat to render.

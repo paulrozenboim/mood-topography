@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Mood Topography — 3D landscape</title>
-<link rel="stylesheet" href="assets/style.css?v=20260815-fa97ad3f">
+<link rel="stylesheet" href="assets/style.css?v=20260817-fin1">
 <style>
   html,body{overflow:hidden}
   #app{position:fixed;inset:0;display:block}
@@ -17,6 +17,14 @@
     letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);text-shadow:0 1px 4px rgba(0,0,0,.55)}
   .hud.tl{top:var(--pad);left:var(--pad)}
   .hud.br{bottom:var(--pad);right:var(--pad);text-align:right;display:flex;flex-direction:column;gap:12px;align-items:flex-end}
+  /* Instructions sit opposite the controls so neither crowds the other and the
+     middle of the frame stays clear. Below 720px they fall back into flow under
+     the path card instead — bottom-left and bottom-right overlap on a phone,
+     and the legend is the half that loses. */
+  #keysLine{margin-top:10px;max-width:min(46vw,420px)}
+  @media(min-width:721px){
+    #keysLine{position:fixed;left:var(--pad);bottom:var(--pad);margin-top:0}
+  }
   .hud .eyebrow{font-size:9px;color:var(--ink-3);letter-spacing:.24em}
   .hud h1{font-size:clamp(16px,2.3vw,26px);font-weight:800;font-variation-settings:'wdth' 116;
     color:var(--ink);margin-top:6px;line-height:1.05;text-shadow:0 2px 8px rgba(0,0,0,.55)}
@@ -39,9 +47,50 @@
   .hud .anim-row button:hover{color:var(--ink)}
   .hud .anim-row button.on{color:var(--ink);background:rgba(127,127,127,.14)}
   .hud .anim-row button svg{width:12px;height:12px;display:block}
+  /* The current path — a square constellation and a way through to it. */
+  .pathcard{display:flex;align-items:center;gap:10px;margin-top:10px;padding:7px;
+    pointer-events:auto;text-decoration:none;background:var(--panel);
+    box-shadow:inset 0 0 0 1px var(--hair);backdrop-filter:blur(8px);
+    max-width:270px;transition:box-shadow .15s}
+  .pathcard:hover{box-shadow:inset 0 0 0 1px var(--ink-3)}
+  .pathcard.static{pointer-events:none}
+  .pathcard-thumb{flex:none;width:54px;height:54px;position:relative;overflow:hidden;
+    background:var(--bg-2);box-shadow:inset 0 0 0 1px var(--hair)}
+  .pathcard-thumb canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .pathcard.no-thumb .pathcard-thumb{display:none}
+  .pathcard-body{min-width:0;display:flex;flex-direction:column;gap:3px}
+  .pathcard-body b{color:var(--ink);font-size:10px;font-weight:700;letter-spacing:.1em;
+    line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pathcard-sub{color:var(--ink-3);font-size:8.5px;letter-spacing:.12em;line-height:1.4}
+
+  /* Fly-through — the headline control, not an icon in a corner. */
+  .fly-btn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;
+    padding:11px 12px;border:0;border-top:1px solid var(--hair);background:transparent;
+    color:var(--ink-2);cursor:pointer;font-family:'Martian Mono',monospace;font-size:10px;
+    letter-spacing:.18em;text-transform:uppercase;pointer-events:auto}
+  .fly-btn:hover{color:var(--ink);background:rgba(127,127,127,.10)}
+  .fly-btn[aria-pressed="true"]{color:var(--ink);background:rgba(127,127,127,.18)}
+  .fly-ico{display:flex}
+  .fly-ico svg{width:18px;height:18px;display:block}
+
   .corner-btns{position:absolute;top:var(--pad);right:var(--pad);display:flex;gap:6px;pointer-events:auto;z-index:6}
   .corner-btns .corner-btn{position:relative;top:auto;right:auto}
   .corner-btns .corner-btn.on{color:var(--ink);background:rgba(127,127,127,.18);box-shadow:inset 0 0 0 1px var(--ink-3)}
+
+  /* ---- Phone ----
+     The two HUD corners are given the full width and stacked instead of facing
+     each other, and the title block is bounded on the right so it wraps rather
+     than running under the corner buttons and off the edge. */
+  @media(max-width:720px){
+    .hud.tl{right:var(--pad)}
+    .hud.tl .eyebrow, .hud.tl h1{padding-right:118px}
+    .hud h1{font-size:clamp(15px,4.4vw,20px)}
+    .pathcard{max-width:none}
+    .hud.br{left:var(--pad);align-items:stretch}
+    .hud .control-panel{min-width:0;width:100%}
+    .hud .slider-row label{width:auto;min-width:3.2em}
+    #keysLine{max-width:none;line-height:1.9}
+  }
 </style>
 </head>
 <body>
@@ -50,7 +99,19 @@
   <div class="hud tl">
     <div class="eyebrow">3D · Mood landscape</div>
     <h1>The Mood Topography</h1>
-    <div class="meta" id="meta"></div>
+    <!-- What you are actually looking at right now, and a way into it. Replaced
+         a line of formula notation that told nobody anything useful. -->
+    <a class="pathcard" id="pathCard" target="_blank" rel="noopener noreferrer">
+      <span class="pathcard-thumb"><canvas id="pathThumb"></canvas></span>
+      <span class="pathcard-body">
+        <b id="pathCardTitle">All paths</b>
+        <span class="pathcard-sub" id="pathCardSub"></span>
+      </span>
+    </a>
+    <!-- Lives here in the DOM so a phone can keep it in flow under the card,
+         where there is room. On a wide screen it is pinned to the bottom-left,
+         opposite the controls. -->
+    <div class="keys" id="keysLine"></div>
   </div>
   <div class="hud br">
     <div class="control-panel">
@@ -75,19 +136,21 @@
         <span class="val" id="speedVal">1.0×</span>
       </div>
       <div class="anim-row" id="animRow"></div>
-    </div>
-    <div class="keys">
-      <b>drag</b> rotate · <b>middle-drag</b> pan · <b>wheel</b> zoom · <b>R</b> reset · <b>Space</b> auto-rotate · <b>P</b> screenshot
+      <!-- The fly-through is the best thing this page does and it was hidden in
+           a corner icon cluster. Full width, labelled, under the transport. -->
+      <button class="fly-btn" id="cinemaBtn" type="button" aria-pressed="false">
+        <span class="fly-ico" id="cinemaIco"></span>
+        <span class="fly-label">Fly the path</span>
+      </button>
     </div>
   </div>
   <div class="corner-btns" id="corners"></div>
 </div>
 
-<script src="assets/icons.js?v=20260815-fa97ad3f"></script>
-<script src="assets/remote-config.js?v=20260815-fa97ad3f"></script>
-<script src="assets/store.js?v=20260815-fa97ad3f"></script>
-<script src="assets/core.js?v=20260815-fa97ad3f"></script>
-<script src="assets/nav.js?v=20260815-fa97ad3f"></script>
+<script src="assets/icons.js?v=20260817-fin1"></script>
+<script src="assets/remote-config.js?v=20260817-fin1"></script>
+<script src="assets/store.js?v=20260817-fin1"></script>
+<script src="assets/core.js?v=20260817-fin1"></script>
 <script>
 "use strict";
 
@@ -101,7 +164,6 @@
 
 const cv = document.getElementById("scene");
 const ctx = cv.getContext("2d");
-const meta = document.getElementById("meta");
 const corners = document.getElementById("corners");
 const heightSlider = document.getElementById("heightSlider");
 const heightVal = document.getElementById("heightVal");
@@ -112,6 +174,15 @@ const opacityVal = document.getElementById("opacityVal");
 const speedSlider = document.getElementById("speedSlider");
 const speedVal = document.getElementById("speedVal");
 
+/* Theme is shared with the results page, which is where visitors arrive from —
+   landing on a dark 3D page from a light results page (or the reverse) reads as
+   two different sites. Same localStorage key, and the write never broadcasts,
+   so a visitor can never repaint the live wall. */
+const PUBLIC_THEME_KEY = "topo.results.theme";
+try{
+  const saved = localStorage.getItem(PUBLIC_THEME_KEY);
+  if(saved === "dark" || saved === "light") Store.setTheme(saved, {broadcast:false});
+}catch(_){}
 document.documentElement.dataset.theme = Store.theme;
 
 // ---- Camera state --------------------------------------------------------
@@ -133,8 +204,6 @@ let showPaths = true;
 let heightScale = 0.45;                  // 0..2 — user-controlled height multiplier
 let sizeContrast = 0.10;                 // 0..1 — cap-radius spread across traffic
 let pathOpacity = 0.75;                  // 0..2 — user-controlled path alpha multiplier
-let dragMode = null;                     // "rotate" | "pan" | null
-let dragStart = null;
 // ---- Playback state (an audio player for paths) --------------------------
 //   mode:   null       — stopped; every path drawn statically
 //           "playlist" — plays paths one after another, auto-advancing
@@ -193,7 +262,7 @@ function resize(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   cx = r.width/2; cy = r.height/2;
 }
-addEventListener("resize", resize); resize();
+addEventListener("resize", () => { resize(); invalidate(); }); resize();
 // Apply the framing offset now that the canvas has a measured size, so the
 // first painted frame matches what Reset gives you.
 resetCamera();
@@ -285,7 +354,7 @@ let maxTraffic = 0;
 let _analysis = null, _analysisVer = -1;
 function computeMaxTraffic(){
   if(_analysis && _analysisVer === Store.version) return _analysis;
-  const A = analyse(Store.paths);
+  const A = analyse(activePaths());
   maxTraffic = Math.max(1, ...A.traffic);
   _analysis = A; _analysisVer = Store.version;
   return A;
@@ -297,8 +366,55 @@ function stationHeight(id, traffic){
   return Math.pow(t, 0.6) * MAX_HEIGHT * heightScale;
 }
 
+/* ---- Render scheduling --------------------------------------------------
+   The scene is static most of the time — nobody is dragging, nothing is
+   playing — and redrawing tens of thousands of stroked segments sixty times a
+   second to produce an identical frame was most of what made this page hot.
+   Everything that can change the picture calls invalidate(); the loop keeps
+   ticking (it is one rAF and a comparison) but only paints when it must.
+
+   `interacting` drops the spline to every Nth point while the camera is
+   actually moving and restores full detail once it settles — the difference is
+   invisible in motion and the still frame anyone looks at is never degraded. */
+/* Station pings. When the drawing tip of an animating path reaches a station,
+   that station gets a short expanding ring and a flare on its cap — the moment
+   the route "arrives" somewhere, which was previously invisible. Keyed by
+   station id, so two paths reaching the same stop just restart one ping rather
+   than stacking two. Works the same in orbit and in the first-person flight. */
+const PING_DUR = 0.85;                 // seconds
+const pings = new Map();               // station id -> elapsed
+const lastStationIdx = new Map();      // path idx -> furthest station reached
+
+let dirty = true;
+let interacting = false, settleTimer = null;
+const invalidate = () => { dirty = true; };
+function beginInteract(){
+  interacting = true;
+  clearTimeout(settleTimer);
+  dirty = true;
+}
+function endInteract(){
+  clearTimeout(settleTimer);
+  settleTimer = setTimeout(() => { interacting = false; dirty = true; }, 180);
+}
+// How coarsely to sample the curves while moving. Scales with how much there is
+// to draw, so a busy night stays responsive on a laptop.
+function lodStride(count){
+  if(!(interacting || autoRotate || anim.playing)) return 1;
+  return count > 220 ? 3 : count > 70 ? 2 : 1;
+}
+
 // ---- Theme-reactive palette ---------------------------------------------
+// getComputedStyle forces a style recalc, so this is resolved once per theme
+// rather than once per frame.
+let _pal = null, _palKey = null;
 function palette(){
+  const key = Store.theme;
+  if(_palKey === key && _pal) return _pal;
+  _palKey = key; _pal = _palette();
+  return _pal;
+}
+function _palette(){
   const rs = getComputedStyle(document.documentElement);
   const dark = Store.theme === "dark";
   return {
@@ -311,7 +427,10 @@ function palette(){
     hair:    rs.getPropertyValue("--hair").trim(),
     grid:    dark ? "rgba(140,160,180,.32)" : "rgba(30,40,55,.34)",
     axis:    dark ? "rgba(255,255,255,.14)" : "rgba(0,0,0,.22)",
-    plate:   dark ? "rgba(0,0,0,.65)"      : "rgba(255,255,255,.85)",
+    plate:   dark ? "rgba(0,0,0,.82)"      : "rgba(255,255,255,.9)",
+    // Fully opaque — used behind the traffic count, which has to stay readable
+    // sitting on top of a station cap in the same colour.
+    plateSolid: dark ? "#0a0d11" : "#f6f7f6",
     pathComp: dark ? "lighter" : "multiply",
     pathReal: dark ? 0.55 : 0.68,
     pathSeed: dark ? 0.22 : 0.28,
@@ -319,22 +438,21 @@ function palette(){
 }
 
 // ---- Draw helpers --------------------------------------------------------
+/* Native dashing rather than a hand-rolled loop. The grid alone is ~30 lines
+   that can each run over a thousand screen pixels; at a 3px dash that was some
+   250 beginPath/stroke pairs per line, several thousand canvas calls a frame
+   before a single route had been drawn. setLineDash does the same thing in one
+   stroke and is part of the saved canvas state, so restore() clears it. */
 function dashedLine(p0, p1, dash=6, gap=6, alpha=1){
   const dx = p1.x - p0.x, dy = p1.y - p0.y;
-  const len = Math.hypot(dx, dy);
-  if(len < 0.1) return;
-  const ux = dx/len, uy = dy/len;
+  if(dx*dx + dy*dy < 0.01) return;
   ctx.save();
   ctx.globalAlpha = alpha;
-  let t = 0;
-  while(t < len){
-    const t1 = Math.min(len, t + dash);
-    ctx.beginPath();
-    ctx.moveTo(p0.x + ux*t, p0.y + uy*t);
-    ctx.lineTo(p0.x + ux*t1, p0.y + uy*t1);
-    ctx.stroke();
-    t = t1 + gap;
-  }
+  ctx.setLineDash([dash, gap]);
+  ctx.beginPath();
+  ctx.moveTo(p0.x, p0.y);
+  ctx.lineTo(p1.x, p1.y);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -354,21 +472,27 @@ function dashedLine(p0, p1, dash=6, gap=6, alpha=1){
 // what made this slow; runs of COLOR_RUN cut both by that factor with no
 // visible banding.
 const COLOR_RUN = 4;
-function drawGradientStroke(buf, n, rgb, samples, cutoff, alpha, lineWidth, comp){
+/* `cols` is the run-colour table built once per path in pathGeometry — the
+   interpolation and the rgb() string used to be rebuilt for every run of every
+   path on every frame, which at a few hundred paths is thousands of string
+   allocations a second for values that never change.
+   `stride` skips source points while the camera is moving; the near-plane clip
+   still runs per drawn segment, so a coarse segment straddling the lens is
+   trimmed exactly as a fine one would be.
+   Composite / lineCap / lineJoin are set by the caller for the whole pass. */
+function drawGradientStroke(buf, n, cols, cutoff, alpha, lineWidth, stride){
   const end = Math.min(cutoff, n);
   if(end < 2 || alpha <= 0) return;
-  const C = CAM, near = C.near, N = rgb.length;
+  const C = CAM, near = C.near;
   const ox = C.pan ? panX : 0, oy = C.pan ? panY : 0;
-  ctx.save();
-  ctx.globalCompositeOperation = comp;
+  const st = stride || 1;
   ctx.lineWidth = lineWidth;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
   ctx.globalAlpha = alpha;
   let run = 0, open = false;
-  for(let i=0; i<end-1; i++){
+  for(let i=0; i<end-1; i+=st){
+    const k = Math.min(i + st, end - 1);        // partner point, clamped to the tip
     let ax = buf[i*3], ay = buf[i*3+1], az = buf[i*3+2];
-    let bx = buf[i*3+3], by = buf[i*3+4], bz = buf[i*3+5];
+    let bx = buf[k*3], by = buf[k*3+1], bz = buf[k*3+2];
     const aIn = az > near, bIn = bz > near;
     if(!aIn && !bIn){                       // wholly behind the lens
       if(open){ ctx.stroke(); open = false; run = 0; }
@@ -388,13 +512,7 @@ function drawGradientStroke(buf, n, rgb, samples, cutoff, alpha, lineWidth, comp
     // Start a new run when the colour step changes or the line was broken.
     if(!open || run >= COLOR_RUN){
       if(open) ctx.stroke();
-      const tPath = (i + 0.5) / samples;
-      const seg = Math.min(N - 2, Math.max(0, Math.floor(tPath)));
-      const f = tPath - seg, c0 = rgb[seg], c1 = rgb[seg+1];
-      ctx.strokeStyle = "rgb(" +
-        ((c0[0] + (c1[0]-c0[0])*f)|0) + "," +
-        ((c0[1] + (c1[1]-c0[1])*f)|0) + "," +
-        ((c0[2] + (c1[2]-c0[2])*f)|0) + ")";
+      ctx.strokeStyle = cols[(i / COLOR_RUN) | 0] || cols[cols.length - 1];
       ctx.beginPath();
       ctx.moveTo(axs, ays);
       open = true; run = 0;
@@ -405,7 +523,6 @@ function drawGradientStroke(buf, n, rgb, samples, cutoff, alpha, lineWidth, comp
     if(clipped){ ctx.stroke(); open = false; run = 0; }
   }
   if(open) ctx.stroke();
-  ctx.restore();
 }
 
 // Catmull-rom through every point, with the ends duplicated so the curve
@@ -446,7 +563,7 @@ function pathGeometry(A){
   if(_geom.key === key) return _geom.items;
   const items = [];
   let idx = 0;
-  for(const p of Store.paths){
+  for(const p of activePaths()){
     if(p.nodes.length < 2) continue;
     const worldPts = p.nodes.map(id => {
       const nd = NODES[id];
@@ -462,10 +579,21 @@ function pathGeometry(A){
       xyz[i*3] = q.x; xyz[i*3+1] = q.y; xyz[i*3+2] = q.z;
       sx += q.x; sy += q.y; sz += q.z;
     }
+    const rgb = p.nodes.map(id => hexToRgb(catColor(NODES[id].c, Store.theme)));
+    // Colour per run of COLOR_RUN segments, resolved to a finished rgb() string
+    // here so the draw loop only ever assigns one.
+    const cols = [];
+    for(let i=0; i<n-1; i+=COLOR_RUN){
+      const tPath = (i + 0.5) / PATH_SAMPLES;
+      const seg = Math.min(rgb.length - 2, Math.max(0, Math.floor(tPath)));
+      const f = tPath - seg, c0 = rgb[seg], c1 = rgb[seg+1];
+      cols.push("rgb(" + ((c0[0] + (c1[0]-c0[0])*f)|0) + "," +
+                         ((c0[1] + (c1[1]-c0[1])*f)|0) + "," +
+                         ((c0[2] + (c1[2]-c0[2])*f)|0) + ")");
+    }
     items.push({
-      p, xyz, n, idx,
-      cx: sx/n, cy: sy/n, cz: sz/n,                       // centroid, for depth sort
-      rgb: p.nodes.map(id => hexToRgb(catColor(NODES[id].c, Store.theme)))
+      p, xyz, n, idx, rgb, cols,
+      cx: sx/n, cy: sy/n, cz: sz/n                        // centroid, for depth sort
     });
     idx++;
   }
@@ -495,8 +623,23 @@ let lastTs = performance.now();
 function frame(ts){
   const dt = Math.min(0.05, (ts - lastTs)/1000);
   lastTs = ts;
-  if(autoRotate && !dragMode) yaw += dt * 0.14;
-  advanceAnim(dt);
+  if(autoRotate && !pointers.size){ yaw += dt * 0.14; dirty = true; }
+  if(anim.playing){ advanceAnim(dt); dirty = true; }
+  // Pings keep the frame alive until they finish, so one can still play out
+  // after playback is paused rather than freezing half-expanded.
+  if(pings.size){
+    for(const [id, t] of pings){
+      const nt = t + dt;
+      if(nt >= PING_DUR) pings.delete(id); else pings.set(id, nt);
+    }
+    dirty = true;
+  }
+  // Nothing moved and nothing changed — the next frame would be identical to
+  // the one already on screen, so don't spend anything drawing it.
+  if(!dirty){ requestAnimationFrame(frame); return; }
+  dirty = false;
+
+  const shown = activePaths();
   // Traffic first — the cinema spline needs station heights, which depend on it.
   const A = computeMaxTraffic();
   // Refreshed every frame, even paused, so a paused frame stays correctly
@@ -538,8 +681,15 @@ function frame(ts){
     dashedLine(axis.a, axis.b, 4, 6, 1);
   }
 
-  // ----- Aggregate paths as 3D curves (skipped when hidden) -----
-  if(showPaths){
+  /* ----- Aggregate paths as 3D curves -----
+     "Hide paths" clears the field so the terrain can be read on its own — but
+     it should not silence playback. With something playing, the path being
+     drawn stays; only the surrounding traffic goes. Hiding while ALL is running
+     would leave nothing at all, so that case keeps drawing. */
+  const animating = anim.mode !== null;
+  const together  = anim.mode === "together";
+  const drawPaths = showPaths || (animating && !together);
+  if(drawPaths){
     // Depth-sort on the centroid only — one transform per path instead of one
     // per spline point, and plenty accurate for ordering these ribbons.
     const items = pathGeometry(A);
@@ -548,16 +698,22 @@ function frame(ts){
       return { g, depth: c.z };
     }).sort((a,b)=> b.depth - a.depth);
 
-    // Playback drives what gets drawn; cinema only changes the camera.
-    const animating = anim.mode !== null;
-    const together  = anim.mode === "together";
     const playCount = items.length;
+    const stride = lodStride(items.length);
+    // Composite and joins are identical for every path in the pass — set once
+    // here rather than save/restoring around each of several hundred strokes.
+    ctx.save();
+    ctx.globalCompositeOperation = P.pathComp;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     for(const { g } of order){
-      const { p, xyz, n, idx, rgb } = g;
+      const { p, xyz, n, idx, rgb, cols } = g;
       const baseAlpha = p.seeded ? P.pathSeed : P.pathReal;
       // Together: every path is a "focus". Playlist: only the current track
       // draws; other paths dim so the animation reads clearly.
       const isFocus = animating && (together || idx === anim.index);
+      // With paths hidden, only the one being drawn survives the cull.
+      if(!showPaths && !isFocus) continue;
       let alpha, cutoff, lineWidth;
       if(animating){
         const prog = pathProgress(idx, playCount);
@@ -573,6 +729,18 @@ function frame(ts){
         lineWidth = 1.6;
         cutoff = n;
       }
+      // Which station the tip has reached. Colour runs land exactly on stations
+      // (n = (stops-1)*PATH_SAMPLES + 1), so integer division gives the stop.
+      if(isFocus){
+        const reached = Math.min(p.nodes.length - 1, Math.floor((cutoff - 1) / PATH_SAMPLES));
+        const prev = lastStationIdx.get(idx);
+        if(prev === undefined || reached > prev){
+          pings.set(p.nodes[reached], 0);
+          lastStationIdx.set(idx, reached);
+        } else if(reached < prev){
+          lastStationIdx.set(idx, reached);   // looped back to the start
+        }
+      }
       const cam = transformPath(xyz, n);
       alpha = Math.max(0, Math.min(1, alpha * pathOpacity));
       if(cinema && isFocus){
@@ -582,10 +750,10 @@ function frame(ts){
         // showed up as one lone straight streak. Lay the whole route down
         // faintly so the road ahead is visible, then overdraw the part already
         // flown at full strength.
-        drawGradientStroke(cam, n, rgb, PATH_SAMPLES, n,      alpha*0.4, lineWidth, P.pathComp);
-        drawGradientStroke(cam, n, rgb, PATH_SAMPLES, cutoff, alpha,     lineWidth, P.pathComp);
+        drawGradientStroke(cam, n, cols, n,      alpha*0.4, lineWidth, stride);
+        drawGradientStroke(cam, n, cols, cutoff, alpha,     lineWidth, stride);
       } else {
-        drawGradientStroke(cam, n, rgb, PATH_SAMPLES, cutoff, alpha, lineWidth, P.pathComp);
+        drawGradientStroke(cam, n, cols, cutoff, alpha, lineWidth, stride);
       }
       // Bright head at the drawing tip — reads as "ink still flowing". Skip
       // in cinema: the camera sits right at that tip, so the dot would blot
@@ -609,6 +777,7 @@ function frame(ts){
         ctx.restore();
       }
     }
+    ctx.restore();   // composite / joins set once for the whole pass
   }
 
   // ----- Station columns + caps -----
@@ -645,15 +814,40 @@ function frame(ts){
       dashedLine(col3.a, col3.b, 5, 4, 0.75);
     }
     if(st.base){
+      // A fixed dot marking where the column meets the floor. It used to scale
+      // with traffic like the cap, which turned the busiest stations into wide
+      // rings on the ground and read as a second, competing chart.
       ctx.save();
-      ctx.globalAlpha = 0.55;
-      ctx.strokeStyle = col; ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = col;
       ctx.beginPath();
-      ctx.arc(st.base.x, st.base.y, Math.max(2, capR * 0.55 * st.base.scale), 0, 7);
-      ctx.stroke();
+      ctx.arc(st.base.x, st.base.y, Math.max(1.2, Math.min(3, 2.4 * st.base.scale)), 0, 7);
+      ctx.fill();
       ctx.restore();
     }
     if(st.top){
+      // Ping: an expanding ring plus a flare on the cap, fading over PING_DUR.
+      // Drawn under the cap so the cap stays a hard, readable disc.
+      const age = pings.get(st.n.id);
+      if(age != null){
+        const u = age / PING_DUR;
+        const e = 1 - (1 - u) * (1 - u);          // ease out
+        const fade = 1 - u;
+        ctx.save();
+        ctx.globalCompositeOperation = P.dark ? "lighter" : "source-over";
+        ctx.globalAlpha = fade * 0.55;
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(st.top.x, st.top.y, capR + 3 + fade * 7, 0, 7);
+        ctx.fill();
+        ctx.globalAlpha = fade * 0.85;
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 0.8 + fade * 2.2;
+        ctx.beginPath();
+        ctx.arc(st.top.x, st.top.y, capR + 4 + e * 30, 0, 7);
+        ctx.stroke();
+        ctx.restore();
+      }
       ctx.save();
       ctx.fillStyle = col;
       ctx.beginPath();
@@ -678,56 +872,141 @@ function frame(ts){
     ctx.fillStyle = P.ink;
     ctx.fillText(txt, st.top.x, st.top.y - 10);
     if(st.traffic > 0){
-      ctx.fillStyle = catColor(st.n.c, Store.theme);
+      // Boxed, on an opaque backing, with a border in the station's own colour.
+      // The count sits directly over the cap, and once the Size slider is up the
+      // cap grows past it — as bare coloured text on a same-coloured disc it
+      // simply vanished.
+      const col = catColor(st.n.c, Store.theme);
+      const numTxt = String(st.traffic);
       ctx.font = `700 9px 'Martian Mono',monospace`;
-      ctx.fillText(String(st.traffic), st.top.x, st.top.y - 24);
+      const nw = ctx.measureText(numTxt).width;
+      const bw = nw + 9, bh = 13;
+      const bx = Math.round(st.top.x - bw/2), by = Math.round(st.top.y - 35);
+      ctx.fillStyle = P.plateSolid;
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.strokeStyle = col; ctx.lineWidth = 1;
+      ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+      ctx.fillStyle = col;
+      ctx.fillText(numTxt, st.top.x, by + bh - 3);
       ctx.font = `600 10px 'Martian Mono',monospace`;
     }
     ctx.restore();
   }
 
-  const real = Store.paths.filter(p=>!p.seeded).length;
-  meta.innerHTML = `<b>${Store.paths.length}</b> total paths &middot; <b>${real}</b> real casts<br>` +
-    `<b>${maxTraffic}</b> peak station traffic &middot; height ∝ traffic<sup>0.6</sup>`;
-
+  updatePathCard(shown);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-// ---- Input --------------------------------------------------------------
-cv.addEventListener("pointerdown", e => {
-  // Any drag while flying first-person = user wants the orbit camera back.
-  // Exit cinema only; the underlying single/seq playback keeps running so
-  // the orbit view shows it continuing to draw.
-  if(cinema){ cinema = false; syncAnimButtons(); }
-  // Middle button (button===1) pans. Anything else rotates.
-  dragMode = e.button === 1 ? "pan" : "rotate";
-  autoRotate = false;
-  dragStart = { x:e.clientX, y:e.clientY, yaw, pitch, panX, panY };
-  cv.setPointerCapture(e.pointerId);
-  if(dragMode === "pan") e.preventDefault();
-});
-cv.addEventListener("pointermove", e => {
-  if(!dragMode) return;
-  const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
-  if(dragMode === "pan"){
-    panX = dragStart.panX + dx;
-    panY = dragStart.panY + dy;
+/* ---- Input ---------------------------------------------------------------
+   One pointer set drives mouse and touch alike:
+     1 pointer            rotate           (left-drag / one finger)
+     2 pointers           pinch to zoom, and drag the midpoint to pan
+     middle button        pan              (mouse only)
+     wheel                zoom
+     double click / tap   reset the view
+   Everything is tracked in `pointers` rather than a single dragStart, because a
+   phone hands you a second finger mid-gesture and the old single-pointer model
+   simply ignored it — pinch and two-finger pan did nothing at all on touch. */
+const pointers = new Map();          // pointerId -> {x, y}
+let gesture = null;                  // rotate | pan | pinch
+let gestureStart = null;
+let lastTapAt = 0, lastTapX = 0, lastTapY = 0;
+
+const twoFinger = () => {
+  const [a, b] = [...pointers.values()];
+  return {
+    dist: Math.hypot(b.x - a.x, b.y - a.y),
+    mx: (a.x + b.x) / 2,
+    my: (a.y + b.y) / 2
+  };
+};
+
+function beginGesture(){
+  if(pointers.size >= 2){
+    const t = twoFinger();
+    gesture = "pinch";
+    gestureStart = { d:t.dist, mx:t.mx, my:t.my, dist, panX, panY };
+  } else if(pointers.size === 1){
+    const p = [...pointers.values()][0];
+    gesture = gesture === "pan" ? "pan" : "rotate";
+    gestureStart = { x:p.x, y:p.y, yaw, pitch, panX, panY };
   } else {
-    // No pitch clamp — camera is fully free: top-down, side-on, from below,
-    // whatever the user wants. Only clamped to ±π so drag can't run away.
-    yaw = dragStart.yaw + dx * 0.005;
-    pitch = Math.max(-Math.PI, Math.min(Math.PI, dragStart.pitch - dy * 0.005));
+    gesture = null; gestureStart = null;
+  }
+}
+
+cv.addEventListener("pointerdown", e => {
+  // Any drag while flying first-person = the user wants the orbit camera back.
+  // Exit cinema only; playback keeps running so the orbit view shows it draw.
+  if(cinema){ cinema = false; syncAnimButtons(); }
+  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  autoRotate = false;
+  cv.setPointerCapture(e.pointerId);
+  // Middle button pans; otherwise the pointer count decides.
+  gesture = (e.button === 1 && pointers.size === 1) ? "pan" : gesture;
+  beginGesture();
+  beginInteract();
+  if(e.button === 1) e.preventDefault();
+});
+
+cv.addEventListener("pointermove", e => {
+  if(!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  if(!gestureStart) return;
+
+  if(gesture === "pinch" && pointers.size >= 2){
+    const t = twoFinger();
+    // Zoom on the ratio of finger separation, pan on where the pair moved.
+    const scale = gestureStart.d > 8 ? gestureStart.d / t.dist : 1;
+    dist = Math.max(250, Math.min(4500, gestureStart.dist * scale));
+    panX = gestureStart.panX + (t.mx - gestureStart.mx);
+    panY = gestureStart.panY + (t.my - gestureStart.my);
+  } else {
+    const p = [...pointers.values()][0];
+    const dx = p.x - gestureStart.x, dy = p.y - gestureStart.y;
+    if(gesture === "pan"){
+      panX = gestureStart.panX + dx;
+      panY = gestureStart.panY + dy;
+    } else {
+      // No pitch clamp — the camera is fully free: top-down, side-on, from
+      // below. Only bounded to ±π so a drag can't run away.
+      yaw = gestureStart.yaw + dx * 0.005;
+      pitch = Math.max(-Math.PI, Math.min(Math.PI, gestureStart.pitch - dy * 0.005));
+    }
+  }
+  dirty = true;
+});
+
+const liftPointer = e => {
+  pointers.delete(e.pointerId);
+  // Lifting one finger of a pinch re-bases the gesture on whatever is left,
+  // so the view doesn't jump as the remaining finger takes over.
+  if(pointers.size){ gesture = "rotate"; beginGesture(); }
+  else { gesture = null; gestureStart = null; endInteract(); }
+};
+cv.addEventListener("pointerup", liftPointer);
+cv.addEventListener("pointercancel", liftPointer);
+
+// Double click / double tap resets the framing — the only way back now that
+// the R key and the reset button are gone.
+cv.addEventListener("pointerup", e => {
+  const now = performance.now();
+  const near = Math.abs(e.clientX - lastTapX) < 28 && Math.abs(e.clientY - lastTapY) < 28;
+  if(now - lastTapAt < 320 && near){
+    resetCamera(); invalidate();
+    lastTapAt = 0;
+  } else {
+    lastTapAt = now; lastTapX = e.clientX; lastTapY = e.clientY;
   }
 });
-const endDrag = () => { dragMode = null; };
-cv.addEventListener("pointerup", endDrag);
-cv.addEventListener("pointercancel", endDrag);
+
 // Suppress the browser's default middle-click autoscroll on Windows.
 cv.addEventListener("auxclick", e => { if(e.button === 1) e.preventDefault(); });
 cv.addEventListener("wheel", e => {
   e.preventDefault();
   dist = Math.max(250, Math.min(4500, dist * (e.deltaY > 0 ? 1.1 : 1/1.1)));
+  beginInteract(); endInteract();
 }, {passive:false});
 
 function resetCamera(){
@@ -737,8 +1016,9 @@ function resetCamera(){
 }
 
 addEventListener("keydown", e => {
-  if(e.key === "r" || e.key === "R") resetCamera();
-  if(e.key === " "){ e.preventDefault(); autoRotate = !autoRotate; }
+  // R is gone: reset is a double click or double tap, which is the same gesture
+  // on both mouse and touch and needs no legend.
+  if(e.key === " "){ e.preventDefault(); autoRotate = !autoRotate; invalidate(); }
   if(e.key === "p" || e.key === "P"){
     const link = document.createElement("a");
     link.download = `mood-topography-3d-${Date.now()}.png`;
@@ -747,10 +1027,48 @@ addEventListener("keydown", e => {
   }
 });
 
+/* ---- The current path -----------------------------------------------------
+   Says what is on screen this second: one journey while the playlist runs, or
+   the whole field otherwise. When it is one journey the card is a link through
+   to that path on the results page, so the terrain is a way IN to the data
+   rather than a dead end. Rebuilt only when the subject changes — this is
+   called every painted frame. */
+let _cardKey = null;
+function updatePathCard(shown){
+  const playable = shown.filter(p => p.nodes.length >= 2);
+  const single = anim.mode === "playlist" && playable[anim.index] ? playable[anim.index] : null;
+  const key = single ? single.id : "all:" + playable.length;
+  if(key === _cardKey) return;
+  _cardKey = key;
+
+  const card = document.getElementById("pathCard");
+  if(single){
+    card.classList.remove("static", "no-thumb");
+    card.href = PUBLIC_BASE + "results.html#q=" + encodeURIComponent(pathCode(single.nodes));
+    document.getElementById("pathCardTitle").textContent =
+      NODES[single.nodes[0]].n + " → " + NODES[single.nodes[single.nodes.length - 1]].n;
+    document.getElementById("pathCardSub").textContent =
+      `${single.nodes.length} stations · ${pathCode(single.nodes)}`;
+    // Drawn straight away rather than on a rAF: the thumb sits in a fixed 54px
+    // box so it always has dimensions, and rAF does not fire in a hidden tab —
+    // which would leave the card blank until the page was looked at again.
+    const cvs = document.getElementById("pathThumb");
+    if(cvs.parentElement.getBoundingClientRect().width > 0){
+      renderConstellation(cvs, single.nodes, Store.theme, { labels:false });
+    }
+  } else {
+    card.classList.add("static", "no-thumb");
+    card.removeAttribute("href");
+    document.getElementById("pathCardTitle").textContent = "All paths";
+    document.getElementById("pathCardSub").textContent =
+      `${playable.length} journeys · ${maxTraffic} peak traffic`;
+  }
+}
+
 // ---- Path animation controller ------------------------------------------
 // Order matches Store.paths (insertion order = cast order, seeded first).
 function playablePathCount(){
-  return Store.paths.filter(p => p.nodes.length >= 2).length;
+  return activePaths().filter(p => p.nodes.length >= 2).length;
 }
 // How long a full ALL cycle lasts: last path's start + its draw + repeat gap.
 // Together mode isn't used with cinema, so it always uses the orbit duration.
@@ -853,6 +1171,7 @@ function animTogglePlay(){
 }
 // ⏮ / ⏭ — skip tracks. Always lands in playlist mode and starts playing.
 function animSkip(delta){
+  lastStationIdx.clear();
   const count = playablePathCount();
   if(!count) return;
   anim.index = ((anim.mode ? anim.index : 0) + delta + count) % count;
@@ -864,6 +1183,7 @@ function animSkip(delta){
 }
 // ⏹ — full stop: static view, cinema off.
 function animStop(){
+  pings.clear(); lastStationIdx.clear();
   anim.mode = null;
   anim.t = 0;
   anim.playing = false;
@@ -921,24 +1241,28 @@ function pathProgress(idxInPlayable, count){
 function updateHeight(){
   heightScale = (+heightSlider.value)/100;
   heightVal.textContent = heightSlider.value + "%";
+  invalidate();
 }
 heightSlider.addEventListener("input", updateHeight);
 updateHeight();
 function updateSize(){
   sizeContrast = (+sizeSlider.value)/100;
   sizeVal.textContent = sizeSlider.value + "%";
+  invalidate();
 }
 sizeSlider.addEventListener("input", updateSize);
 updateSize();
 function updateOpacity(){
   pathOpacity = (+opacitySlider.value)/100;
   opacityVal.textContent = opacitySlider.value + "%";
+  invalidate();
 }
 opacitySlider.addEventListener("input", updateOpacity);
 updateOpacity();
 function updateSpeed(){
   playSpeed = (+speedSlider.value)/100;
   speedVal.textContent = playSpeed.toFixed(1) + "×";
+  invalidate();
 }
 speedSlider.addEventListener("input", updateSpeed);
 updateSpeed();
@@ -956,12 +1280,15 @@ const animPlayBtn   = document.getElementById("animPlay");
 const animStopBtn   = document.getElementById("animStop");
 const animAllBtn    = document.getElementById("animAll");
 const animRepeatBtn = document.getElementById("animRepeat");
-document.getElementById("animPrev").onclick = () => animSkip(-1);
-document.getElementById("animNext").onclick = () => animSkip(+1);
-animPlayBtn.onclick   = animTogglePlay;
-animStopBtn.onclick   = animStop;
-animRepeatBtn.onclick = animCycleRepeat;
-animAllBtn.onclick    = animToggleAll;
+// Every transport control changes the picture, so each one marks the frame
+// dirty — the loop only paints on demand now.
+const act = fn => (...a) => { fn(...a); invalidate(); };
+document.getElementById("animPrev").onclick = act(() => animSkip(-1));
+document.getElementById("animNext").onclick = act(() => animSkip(+1));
+animPlayBtn.onclick   = act(animTogglePlay);
+animStopBtn.onclick   = act(animStop);
+animRepeatBtn.onclick = act(animCycleRepeat);
+animAllBtn.onclick    = act(animToggleAll);
 // Initial sync happens at the very bottom, AFTER the corner buttons block
 // declares cinemaBtn — otherwise ?. still trips the TDZ on that const.
 function syncAnimButtons(){
@@ -983,39 +1310,80 @@ function syncAnimButtons(){
     animRepeatBtn.classList.toggle("on", anim.repeat !== "off");
   }
   animAllBtn?.classList.toggle("on", anim.mode === "together");
-  cinemaBtn ?.classList.toggle("on", cinema);
+  cinemaBtn?.setAttribute("aria-pressed", cinema ? "true" : "false");
 }
 
 // ---- Corner buttons ------------------------------------------------------
 const pathsIconOn  = Icons.eyeOn;
 const pathsIconOff = Icons.eyeOff;
 corners.innerHTML =
-  `<button class="corner-btn icon-only" id="cinemaBtn" title="Cinematic fly-through" aria-label="Cinematic fly-through">${Icons.cinema}</button>` +
-  `<button class="corner-btn icon-only" id="pathsBtn"  title="Hide paths" aria-label="Hide paths">${pathsIconOn}</button>` +
-  `<button class="corner-btn icon-only" id="fitBtn"    title="Reset view">${Icons.fit}</button>` +
-  `<button class="corner-btn icon-only" id="themeBtn"  title="Toggle theme">${Icons.theme}</button>`;
+  `<button class="corner-btn icon-only" id="pathsBtn" title="Hide paths" aria-label="Hide paths">${pathsIconOn}</button>` +
+  `<button class="corner-btn icon-only" id="fullBtn"  title="Fullscreen" aria-label="Fullscreen">${Icons.fullscreen}</button>` +
+  `<button class="corner-btn icon-only" id="themeBtn" title="Toggle theme">${Icons.theme}</button>`;
 const pathsBtn  = document.getElementById("pathsBtn");
+// Cinema now lives in the control panel, where people will actually find it.
 const cinemaBtn = document.getElementById("cinemaBtn");
-document.getElementById("fitBtn").onclick = resetCamera;
-document.getElementById("themeBtn").onclick = () => Store.setTheme(Store.theme === "dark" ? "light" : "dark");
-cinemaBtn.onclick = animToggleCinema;
+document.getElementById("cinemaIco").innerHTML = Icons.cinema;
+
+// The old "reset view" slot is a fullscreen toggle — resetting is a double tap,
+// and on a phone the thing you actually want from a corner is more screen.
+const fullBtn = document.getElementById("fullBtn");
+function syncFullBtn(){
+  const on = !!document.fullscreenElement;
+  fullBtn.innerHTML = on ? Icons.fullscreenExit : Icons.fullscreen;
+  const label = on ? "Exit fullscreen" : "Fullscreen";
+  fullBtn.title = label; fullBtn.setAttribute("aria-label", label);
+  fullBtn.classList.toggle("on", on);
+}
+fullBtn.onclick = () => {
+  const d = document.documentElement;
+  if(document.fullscreenElement) document.exitFullscreen?.();
+  else (d.requestFullscreen?.({navigationUI:"hide"}) ?? d.webkitRequestFullscreen?.())?.catch?.(()=>{});
+};
+document.addEventListener("fullscreenchange", () => { syncFullBtn(); resize(); invalidate(); });
+syncFullBtn();
+// {broadcast:false} matters: this page is linked publicly from the results
+// page, and a visitor flipping the theme used to repaint the live projection,
+// the kiosk and every other open surface. The choice stays on this device.
+document.getElementById("themeBtn").onclick = () => {
+  const next = Store.theme === "dark" ? "light" : "dark";
+  try{ localStorage.setItem(PUBLIC_THEME_KEY, next); }catch(_){}
+  Store.setTheme(next, { broadcast:false });
+};
+cinemaBtn.onclick = act(animToggleCinema);
 pathsBtn.onclick = () => {
   showPaths = !showPaths;
   pathsBtn.innerHTML = showPaths ? pathsIconOn : pathsIconOff;
   const label = showPaths ? "Hide paths" : "Show paths";
   pathsBtn.title = label; pathsBtn.setAttribute("aria-label", label);
+  invalidate();
 };
 // Now that every button exists, sync their initial visual state.
 syncAnimButtons();
 
-// ---- Shared nav ---------------------------------------------------------
-initQuickNav({current:"landscape", actions:[
-  {html: Icons.fit,   title:"Reset view",  onClick:resetCamera},
-  {html: Icons.theme, title:"Toggle theme", onClick:()=>Store.setTheme(Store.theme==="dark"?"light":"dark")}
-]});
+/* The legend, written for whichever device is reading it. A phone has no wheel
+   and no middle button, and telling someone to middle-drag on a touchscreen is
+   worse than saying nothing. Width counts as well as pointer type: a narrow
+   window has no room for the long version either way, and a touchscreen laptop
+   reports a fine pointer while still being used by hand. */
+function paintKeys(){
+  const touch = matchMedia("(pointer: coarse)").matches || innerWidth <= 720;
+  document.getElementById("keysLine").innerHTML = touch
+    ? `<b>drag</b> rotate · <b>two fingers</b> pan · <b>pinch</b> zoom · <b>double tap</b> reset`
+    : `<b>drag</b> rotate · <b>middle-drag</b> pan · <b>wheel</b> zoom · ` +
+      `<b>double click</b> reset · <b>Space</b> auto-rotate · <b>P</b> screenshot`;
+}
+paintKeys();
+addEventListener("resize", paintKeys);
 
-Store.sub(()=>{ document.documentElement.dataset.theme = Store.theme });
-Sync.hello();
+/* ---- No operator nav ----------------------------------------------------
+   This page is public — it is linked from the results page and opens in a new
+   tab for anyone with the URL. initQuickNav() would put Settings, Cast Path
+   and Projection one tap away, which is the whole reason the results page has
+   no nav either. Sync.hello() is gone for the same reason: nothing here should
+   speak on the sync channel. The page still LISTENS, so it keeps updating live
+   while the night runs. */
+Store.sub(()=>{ document.documentElement.dataset.theme = Store.theme; invalidate(); });
 </script>
 </body>
 </html>

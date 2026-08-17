@@ -72,12 +72,14 @@ const Sync = (()=>{
       if(m.k==="remove") Store.removePath(m.id,{broadcast:false});
       if(m.k==="filter") Store.setFilter(m.f,{broadcast:false});
       if(m.k==="auto")   Store.setAuto(m.v,{broadcast:false});
+      if(m.k==="showDemo") Store.setShowDemo(m.v,{broadcast:false});
       if(m.k==="theme")  Store.setTheme(m.val,{broadcast:false}); // (older messages carried a `which` field — we ignore it and set the unified theme)
       if(m.k==="clear")  Store.clear({broadcast:false});
       if(m.k==="clearSeeded") Store.clearSeeded({broadcast:false});
-      if(m.k==="hello")  this.send({k:"state",paths:Store.paths,filter:Store.filter,auto:Store.auto,theme:Store.theme});
+      if(m.k==="hello")  this.send({k:"state",paths:Store.paths,filter:Store.filter,auto:Store.auto,theme:Store.theme,showDemo:Store.showDemo});
       if(m.k==="state" && Store.paths.length===0){
         Store.replaceAll(m.paths); Store.filter=m.filter; Store.auto=m.auto;
+        if(typeof m.showDemo === "boolean") Store.showDemo = m.showDemo;
         // Normalise: an older client might send theme in the legacy shape.
         Store.theme = _initTheme(m.theme);
         Store.emit({type:"reset"});
@@ -112,7 +114,8 @@ function persistNow(){
   try{
     if(typeof localStorage==="undefined") return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      paths: Store.paths, filter: Store.filter, auto: Store.auto, theme: Store.theme
+      paths: Store.paths, filter: Store.filter, auto: Store.auto, theme: Store.theme,
+      showDemo: Store.showDemo
     }));
   }catch(_){}
 }
@@ -132,6 +135,10 @@ const Store = {
   paths: _persisted?.paths || [],
   filter: _persisted?.filter || {type:"all"},
   auto: _persisted?.auto ?? true,
+  // Rehearsal paths are hidden everywhere by default. The operator turns them
+  // on from Settings while there is nothing real to show yet; the flag rides
+  // the sync channel so every surface agrees at once.
+  showDemo: _persisted?.showDemo ?? false,
   theme: _initTheme(_persisted?.theme),
   listeners:new Set(),
   version:0,
@@ -158,6 +165,12 @@ const Store = {
   setAuto(v,{broadcast=true}={}){
     this.auto=v; if(broadcast) Sync.send({k:"auto", v});
     this.emit({type:"auto"});
+  },
+  setShowDemo(v,{broadcast=true}={}){
+    this.showDemo=!!v; if(broadcast) Sync.send({k:"showDemo", v:this.showDemo});
+    // emit() bumps version, which invalidates analyse()'s cache — essential,
+    // since every aggregate now depends on this flag.
+    this.emit({type:"showDemo"});
   },
   setTheme(val,{broadcast=true}={}){
     // Single unified theme now — one value applies to every operator surface

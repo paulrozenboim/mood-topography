@@ -253,16 +253,34 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .stub-meta{margin:0 22px 14px;display:flex;justify-content:space-between;font-family:'Martian Mono',monospace;
   font-size:9px;color:var(--ink-3);letter-spacing:.1em;border-top:1px dashed var(--hair);padding-top:12px}
 
-/* keepsake block — QR + shareable URL, only shown after casting */
-.keepsake{margin:0 22px 18px;display:flex;gap:14px;align-items:center;padding:12px;
-  box-shadow:inset 0 0 0 1px var(--hair)}
+/* Keepsake block — the call to action, only shown after casting.
+   A two-column grid (QR | text) with the heading spanning both. Print collapses
+   it to a single column, so the three children stack in DOM order without any
+   reordering: heading, QR, code. Note tablet.html sets display:grid inline when
+   the QR is ready, so print must never force display here. */
+.keepsake{margin:0 22px 18px;display:grid;grid-template-columns:auto minmax(0,1fr);
+  gap:8px 14px;align-items:center;padding:12px;box-shadow:inset 0 0 0 1px var(--hair)}
+.keepsake-cta{grid-column:1/-1;font-family:'Martian Mono',monospace;font-size:9px;
+  font-weight:400;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3)}
 .keepsake canvas{flex:none;background:#fff;padding:6px;display:block}
-.keepsake-text{flex:1;min-width:0}
+.keepsake-text{min-width:0}
 .keepsake-text p{margin-top:6px;font-family:'Martian Mono',monospace;font-size:10.5px;
   line-height:1.55;color:var(--ink-2)}
 .keepsake-url{display:block;margin-top:8px;font-family:'Martian Mono',monospace;font-size:9.5px;
   color:var(--ink-3);letter-spacing:.02em;word-break:break-all;text-decoration:none}
 .keepsake-url:hover{color:var(--ink)}
+
+/* The path code — the half of the receipt that gets typed rather than scanned.
+   Boxed and letter-spaced because it is read off thermal paper, often in a dark
+   room, and then keyed into a phone. */
+.pathcode{margin-top:10px;display:inline-flex;flex-direction:column;gap:3px;
+  padding:7px 11px;box-shadow:inset 0 0 0 1px var(--hair)}
+.pathcode-label{font-family:'Martian Mono',monospace;font-size:8px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--ink-3)}
+.pathcode b{font-family:'Martian Mono',monospace;font-size:15px;font-weight:700;
+  letter-spacing:.14em;color:var(--ink);line-height:1.1}
+.codehint{margin-top:7px;font-family:'Martian Mono',monospace;font-size:9.5px;
+  line-height:1.5;color:var(--ink-3)}
 
 /* credits — shared by view.html and the tablet's print block. On screen the block
    is compact and low-contrast; in print it's slightly stronger. */
@@ -339,20 +357,33 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     line-height:0}
   .constellation-wrap canvas{width:100%!important;height:auto!important;display:block!important}
 
-  /* Keepsake — QR only. The "TAKE IT WITH YOU" eyebrow, the description
-     paragraph, and the raw URL text are all hidden per the receipt spec.
+  /* Keepsake — the call to action. A heading, the QR to the results page, the
+     path code in a box, and one line telling them what to do with it. Stacked
+     and centred: 66mm is far too narrow for the side-by-side screen layout.
      ---
-     Deliberately DO NOT force display here. tablet.html sets inline
-     display:none in openPreview() (no QR generated yet) and display:flex in
-     castNow() (QR ready). Forcing display:block in print used to override the
+     Deliberately DO NOT force display on .keepsake itself. tablet.html sets
+     inline display:none in openPreview() (no QR generated yet) and display:flex
+     in castNow() (QR ready). Forcing display:block in print used to override the
      display:none, printing an empty QR placeholder as a ~40mm blank rectangle
-     between the constellation and the credits — the whitespace the user kept
-     seeing was the empty QR canvas, not real margin. */
-  .keepsake{margin:2mm 0!important;padding:0!important;box-shadow:none!important;
-    border:none!important;text-align:center;justify-content:center}
+     between the constellation and the credits. */
+  .keepsake{margin:3.5mm 0 0!important;padding:0!important;box-shadow:none!important;
+    border:none!important;text-align:center;
+    grid-template-columns:1fr!important;justify-items:center!important;gap:0!important;
+    border-top:1px dashed #000;padding-top:2.5mm!important}
+  .keepsake-cta{display:block!important;font-size:8pt!important;font-weight:700!important;
+    letter-spacing:.14em!important;color:#000!important;text-transform:uppercase}
   .keepsake canvas{background:#fff!important;display:block!important;
-    width:32mm!important;height:32mm!important;margin:0 auto!important;padding:0!important}
-  .keepsake-text{display:none!important}
+    width:30mm!important;height:30mm!important;margin:1.8mm auto 0!important;padding:0!important}
+  .keepsake-text{display:block!important;text-align:center;width:100%}
+  .keepsake-text .screen-only{display:none!important}
+  .pathcode{display:block!important;margin:3mm auto 0!important;padding:1.5mm 2mm!important;
+    box-shadow:none!important;border:1px solid #000!important;width:fit-content}
+  .pathcode-label{display:block!important;font-size:6pt!important;letter-spacing:.16em!important;
+    color:#000!important}
+  .pathcode b{display:block!important;font-size:13pt!important;letter-spacing:.16em!important;
+    margin-top:0.6mm}
+  .codehint{display:block!important;margin-top:1.6mm!important;font-size:6.5pt!important;
+    line-height:1.35!important;color:#000!important}
 
   /* Credits — one line per row, no IG URL. Small dashed separator above. */
   .print-credits{display:block!important;margin-top:3mm!important;padding-top:2mm!important;

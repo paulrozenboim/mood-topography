@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>The Mood Topography — Live wall</title>
-<link rel="stylesheet" href="assets/style.css?v=20260815-fa97ad3f">
+<link rel="stylesheet" href="assets/style.css?v=20260817-fin1">
 </head>
 <body>
 <div id="app">
@@ -24,11 +24,11 @@
     <div class="sub" id="sub"></div>
   </div>
 </div>
-<script src="assets/icons.js?v=20260815-fa97ad3f"></script>
-<script src="assets/remote-config.js?v=20260815-fa97ad3f"></script>
-<script src="assets/store.js?v=20260815-fa97ad3f"></script>
-<script src="assets/core.js?v=20260815-fa97ad3f"></script>
-<script src="assets/nav.js?v=20260815-fa97ad3f"></script>
+<script src="assets/icons.js?v=20260817-fin1"></script>
+<script src="assets/remote-config.js?v=20260817-fin1"></script>
+<script src="assets/store.js?v=20260817-fin1"></script>
+<script src="assets/core.js?v=20260817-fin1"></script>
+<script src="assets/nav.js?v=20260817-fin1"></script>
 <script>
 "use strict";
 const el=(tag,cls,html)=>{const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e};
@@ -192,7 +192,7 @@ function paint(b){
   sub.textContent=b.sub||"";
   view.setFocus(b.focus||null);
 }
-function rebuild(){ queue=bulletins(view.A||analyse(Store.paths)); if(qi>=queue.length) qi=0 }
+function rebuild(){ queue=bulletins(view.A||analyse(activePaths())); if(qi>=queue.length) qi=0 }
 function tick(ts){
   if(!queue.length) rebuild();
   // Paused: freeze the auto-rotation entirely. Next/prev clicks still advance
@@ -201,7 +201,7 @@ function tick(ts){
     lastSwap=ts; rebuild();
     if(queue.length){ paint(queue[qi%queue.length]); qi++ }
   }
-  const A=view.A||analyse(Store.paths);
+  const A=view.A||analyse(activePaths());
   stats.innerHTML=`<div class="stat"><b>${A.real}</b><span>journeys cast</span></div>`+
     `<div class="stat"><b>${A.distinct}</b><span>distinct routes</span></div>`+
     `<div class="stat"><b>${A.edgeList.length}</b><span>active links</span></div>`;
@@ -240,7 +240,7 @@ Store.sub(evt=>{
     view.playInjection(evt.path);
     lastSwap = performance.now() + 4000;    // block auto-rotation while injection plays
     setTimeout(()=>{
-      const insight = castBulletin(evt.path, Store.paths);
+      const insight = castBulletin(evt.path, activePaths());
       paint(insight);
       // ~7 s of visible insight before auto-pilot resumes
       lastSwap = performance.now() + 1500;

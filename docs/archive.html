@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Mood Topography — Archive</title>
-<link rel="stylesheet" href="assets/style.css?v=20260815-fa97ad3f">
+<link rel="stylesheet" href="assets/style.css?v=20260817-fin1">
 <style>
   html,body{overflow:auto}
   .archive{max-width:1280px;margin:0 auto;padding:var(--pad)}
@@ -117,10 +117,6 @@
   </header>
 
   <div class="filters" id="filters">
-    <button class="chip" data-filter="all"    aria-pressed="true">All</button>
-    <button class="chip" data-filter="real"   aria-pressed="false">Real casts only</button>
-    <button class="chip" data-filter="seeded" aria-pressed="false">Demo only</button>
-    <span class="divider"></span>
     <button class="chip" id="selectToggle" type="button" aria-pressed="false">Select</button>
   </div>
 
@@ -136,11 +132,11 @@
   <div class="grid" id="grid"></div>
 </div>
 
-<script src="assets/icons.js?v=20260815-fa97ad3f"></script>
-<script src="assets/remote-config.js?v=20260815-fa97ad3f"></script>
-<script src="assets/store.js?v=20260815-fa97ad3f"></script>
-<script src="assets/core.js?v=20260815-fa97ad3f"></script>
-<script src="assets/nav.js?v=20260815-fa97ad3f"></script>
+<script src="assets/icons.js?v=20260817-fin1"></script>
+<script src="assets/remote-config.js?v=20260817-fin1"></script>
+<script src="assets/store.js?v=20260817-fin1"></script>
+<script src="assets/core.js?v=20260817-fin1"></script>
+<script src="assets/nav.js?v=20260817-fin1"></script>
 <script>
 "use strict";
 const archiveEl = document.getElementById("archive");
@@ -157,7 +153,6 @@ const exportSelBtn = document.getElementById("exportSelBtn");
 const deleteSelBtn = document.getElementById("deleteSelBtn");
 const cancelSelBtn = document.getElementById("cancelSelBtn");
 
-let filterMode = "all";
 let selectMode = false;
 const selectedIds = new Set();
 
@@ -178,15 +173,12 @@ function fmtDate(t){
 }
 
 function render(){
-  // newest first — sort defensive-copy so we don't mutate Store.paths
-  let paths = Store.paths.slice().sort((a,b)=>(b.t||0)-(a.t||0));
-  if(filterMode==="real")   paths = paths.filter(p=>!p.seeded);
-  if(filterMode==="seeded") paths = paths.filter(p=>p.seeded);
-
-  const total = Store.paths.length;
-  const real = Store.paths.filter(p=>!p.seeded).length;
-  const seed = total - real;
-  headMeta.innerHTML = `<b>${total}</b> total &middot; <b>${real}</b> real &middot; <b>${seed}</b> demo`;
+  // newest first — sort a defensive copy so we don't mutate the store.
+  // activePaths() already applies the global "show demo paths" toggle, so this
+  // page shows exactly what every other surface is showing.
+  const paths = activePaths().slice().sort((a,b)=>(b.t||0)-(a.t||0));
+  headMeta.innerHTML = `<b>${paths.length}</b> journey${paths.length===1?"":"s"} in this session` +
+    (Store.showDemo ? ` &middot; <b>rehearsal paths included</b>` : "");
 
   if(!paths.length){
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1">No paths in this session yet.<br><br>
@@ -260,7 +252,7 @@ deselectAllBtn.onclick = () => {
 };
 
 exportSelBtn.onclick = () => {
-  const chosen = Store.paths.filter(p => selectedIds.has(p.id));
+  const chosen = activePaths().filter(p => selectedIds.has(p.id));
   if(!chosen.length) return;
   const payload = {
     exported: new Date().toISOString(),
@@ -286,13 +278,6 @@ deleteSelBtn.onclick = () => {
   updateSelectBar();
 };
 
-filters.addEventListener("click", ev => {
-  const btn = ev.target.closest(".chip[data-filter]"); if(!btn) return;
-  filterMode = btn.dataset.filter;
-  [...filters.children].forEach(b=>b.setAttribute("aria-pressed", b===btn ? "true" : "false"));
-  render();
-});
-
 // Grid click delegation:
 //   (A) In select mode, a click on any card toggles selection (blocks navigation).
 //   (B) Any click on the card action buttons (print / delete) is intercepted
@@ -306,7 +291,7 @@ grid.addEventListener("click", ev => {
     ev.preventDefault();
     ev.stopPropagation();
     const id = card.dataset.pathId;
-    const p = Store.paths.find(x=>x.id===id);
+    const p = activePaths().find(x=>x.id===id);
     if(!p) return;
     if(act.dataset.act === "delete"){
       if(confirm(`Remove this path (${NODES[p.nodes[0]].n} → ${p.nodes.length} stations) from the archive?\nThis can't be undone.`)){
