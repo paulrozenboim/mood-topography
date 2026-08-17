@@ -9,7 +9,13 @@ the night goes on.
 
 All under `docs/`:
 
-- `index.html` — landing
+- `index.html` — the **public results page**. This is the site: a bare
+  `…/mood-topography/` lands a stranger on the map, not on the controls. See below.
+- `backstage.html` — the operator landing, the menu of every page. It used to be
+  `index.html`, which meant anyone who trimmed a URL back to the slash arrived at a
+  tile linking straight to Settings. Renaming it is the fix.
+- `results.html` — a redirect to `./` that keeps its hash. Receipts printed before the
+  move point at `results.html#q=MT-…`; **do not delete it.**
 - `tablet.html` — the **Cast Path** kiosk. Anchor a station, drag through 3–10 more,
   ends with a receipt modal (constellation + QR to `view.html`).
 - `projection.html` — the public wall. Live aggregate map, per-bulletin animations,
@@ -19,8 +25,6 @@ All under `docs/`:
   curves. Has a path player and a first-person fly-through.
 - `settings.html` — operator controls: filter, theme, seed/clear, sync mode, archive.
 - `archive.html` — every path cast this session as a grid; click to open its keepsake.
-- `results.html` — the **public results page**. What you send round when the night is
-  over. See below.
 - `view.html` — a single path on its own. Reads a base36-encoded path from the URL hash,
   renders the constellation, shows its **path code**, and prints the thermal receipt that
   `archive.html`'s reprint button uses. Reached from the archive now, not handed out —
@@ -52,7 +56,7 @@ found, and the same path as a typed code underneath:
 
 ```
         SEE THE WHOLE MAP
-             [ QR ]              → …/results.html#q=MT-45FVYX
+             [ QR ]              → …/mood-topography/#q=MT-45FVYX
       ┌──────────────────┐
       │  YOUR PATH CODE  │
       │    MT-45FVYX     │
@@ -84,9 +88,28 @@ exactly, so a bare `hope` is both a station to search for and a valid four-stop 
 `archive.html`'s reprint button goes through `view.html`, which emits a byte-identical
 receipt.
 
+## Who can reach what
+
+Two public pages — `index.html` and `landscape.html` — and everything else is the
+operator's. That split is enforced by three things, none of which is a password:
+
+- **The public page is the root.** Trimming a URL back to the slash, the one thing
+  people actually do, lands on the results page.
+- **The operator landing is `backstage.html`**, a name nobody types on a guess.
+- **Every operator page carries `<meta name="robots" content="noindex, nofollow">`**,
+  so they stay out of search results — the other way people arrive somewhere they were
+  never linked to.
+
+Be clear about what this is: obscurity, not access control. `settings.html` is still
+served to anyone who types it, because GitHub Pages has no server-side auth to hang a
+login on. It raises the bar past wandering and stops there. If you ever need more than
+that, the honest options are moving the operator pages into a folder with an
+unguessable name, or not deploying them at all and running the booth off the local
+Python server.
+
 ## The results page
 
-`results.html` is the one page built for strangers on phones rather than for the
+`index.html` is the one page built for strangers on phones rather than for the
 operator. It links nowhere into the operator pages. The order shows the result first and
 explains the process last:
 
@@ -177,7 +200,7 @@ Live works immediately after the event with no extra step — but that log keeps
 and a **Clear everything** wipes it. To pin the night permanently:
 
 **Settings → Public results page → Freeze results.** That downloads `results.json`
-(real casts only). Put it in `docs/` next to `results.html` and push. The page then
+(real casts only). Put it in `docs/` next to `index.html` and push. The page then
 serves that exact set forever and shows "Final results · frozen &lt;date&gt;" instead of
 the live pill.
 

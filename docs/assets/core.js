@@ -112,7 +112,7 @@ function parsePathCode(str){
 }
 // The address a receipt points at: the results page with this path already found.
 function resultsURLFor(nodeIds){
-  return PUBLIC_BASE + "results.html#q=" + encodeURIComponent(pathCode(nodeIds));
+  return PUBLIC_BASE + "#q=" + encodeURIComponent(pathCode(nodeIds));
 }
 
 /* Is the address we are about to PRINT stale?

@@ -2,12 +2,16 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<!-- Operator surface. Renaming the landing page keeps a stranger who types the
+     bare URL out; this keeps the page out of search results, which is the other
+     way people arrive somewhere they were never linked to. -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Mood Topography — Settings</title>
-<link rel="stylesheet" href="assets/style.css?v=20260817-mood1">
+<link rel="stylesheet" href="assets/style.css?v=20260818-root1">
 </head>
 <body>
 <div id="app">
@@ -71,7 +75,7 @@
           The printed QR always points at <b>PUBLIC_BASE</b> in <b>assets/core.js</b>, never at whatever address this
           kiosk is on — check it before a print run.</div>
         <div class="row">
-          <a class="chip" href="results.html" target="_blank">Open results page<b>live — reads the cloud log now</b></a>
+          <a class="chip" href="./" target="_blank">Open results page<b>live — reads the cloud log now</b></a>
           <button class="chip" id="freezeBtn">Freeze results<b>downloads results.json to commit</b></button>
         </div>
       </div>
@@ -102,12 +106,12 @@
     </div>
   </div>
 </div>
-<script src="assets/icons.js?v=20260817-mood1"></script>
-<script src="assets/remote-config.js?v=20260817-mood1"></script>
-<script src="assets/store.js?v=20260817-mood1"></script>
-<script src="assets/core.js?v=20260817-mood1"></script>
-<script src="assets/seed.js?v=20260817-mood1"></script>
-<script src="assets/nav.js?v=20260817-mood1"></script>
+<script src="assets/icons.js?v=20260818-root1"></script>
+<script src="assets/remote-config.js?v=20260818-root1"></script>
+<script src="assets/store.js?v=20260818-root1"></script>
+<script src="assets/core.js?v=20260818-root1"></script>
+<script src="assets/seed.js?v=20260818-root1"></script>
+<script src="assets/nav.js?v=20260818-root1"></script>
 <script>
 "use strict";
 const el=(tag,cls,html)=>{const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e};
@@ -255,7 +259,7 @@ document.getElementById("exportBtn").onclick = () => {
 
 /* ---- Freeze the public results page -------------------------------------
    Same shape as the archive export plus an `event` block, and deliberately a
-   FIXED filename: results.html looks for exactly `results.json` beside itself,
+   FIXED filename: the results page looks for exactly `results.json` beside it,
    so a timestamped name would be silently ignored. Rehearsal paths are dropped
    here rather than at read time — a frozen snapshot is the public record, and
    demo journeys have no business in it.
@@ -265,7 +269,7 @@ document.getElementById("freezeBtn").onclick = () => {
   if(!real.length && !confirm("There are no real casts in this session — freeze anyway?\nThe results page will show demo paths and say so.")) return;
   const paths = real.length ? real : Store.paths;
   const payload = {
-    event: { title:"The Topography of Us", occasion:"Democracy Month Art Lab",
+    event: { title:"The Mood Topography", occasion:"Democracy Month Art Lab",
              venue:"Teder", city:"Tel Aviv" },
     exported: new Date().toISOString(),
     count: paths.length,
@@ -278,7 +282,7 @@ document.getElementById("freezeBtn").onclick = () => {
   a.download = "results.json";
   a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  alert(`Froze ${paths.length} journeys into results.json.\n\nPut it in docs/ next to results.html and push — the shared link then shows this exact set, whatever happens to the live log.`);
+  alert(`Froze ${paths.length} journeys into results.json.\n\nPut it in docs/ next to index.html and push — the shared link then shows this exact set, whatever happens to the live log.`);
 };
 
 const importFile = document.getElementById("importFile");

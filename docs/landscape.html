@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Mood Topography — 3D landscape</title>
-<link rel="stylesheet" href="assets/style.css?v=20260817-mood1">
+<link rel="stylesheet" href="assets/style.css?v=20260818-root1">
 <style>
   html,body{overflow:hidden}
   #app{position:fixed;inset:0;display:block}
@@ -147,10 +147,10 @@
   <div class="corner-btns" id="corners"></div>
 </div>
 
-<script src="assets/icons.js?v=20260817-mood1"></script>
-<script src="assets/remote-config.js?v=20260817-mood1"></script>
-<script src="assets/store.js?v=20260817-mood1"></script>
-<script src="assets/core.js?v=20260817-mood1"></script>
+<script src="assets/icons.js?v=20260818-root1"></script>
+<script src="assets/remote-config.js?v=20260818-root1"></script>
+<script src="assets/store.js?v=20260818-root1"></script>
+<script src="assets/core.js?v=20260818-root1"></script>
 <script>
 "use strict";
 
@@ -1044,7 +1044,7 @@ function updatePathCard(shown){
   const card = document.getElementById("pathCard");
   if(single){
     card.classList.remove("static", "no-thumb");
-    card.href = PUBLIC_BASE + "results.html#q=" + encodeURIComponent(pathCode(single.nodes));
+    card.href = PUBLIC_BASE + "#q=" + encodeURIComponent(pathCode(single.nodes));
     document.getElementById("pathCardTitle").textContent =
       NODES[single.nodes[0]].n + " → " + NODES[single.nodes[single.nodes.length - 1]].n;
     document.getElementById("pathCardSub").textContent =

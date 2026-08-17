@@ -8,13 +8,17 @@
    ============================================================ */
 "use strict";
 function initQuickNav({current, actions=[]}={}){
+  /* "Results" is the site root: the public read-out is index.html, so that a
+     bare ".../mood-topography/" lands a stranger on the map and not on this
+     menu. The operator landing moved to backstage.html — this nav is the only
+     thing that links to it, and this nav only exists on operator pages. */
   const PAGES=[
-    ["index.html","Home","index"],
+    ["backstage.html","Backstage","backstage"],
     ["tablet.html","Cast Path","tablet"],
     ["projection.html","Projection","projection"],
     ["landscape.html","Landscape","landscape"],
     ["archive.html","Archive","archive"],
-    ["results.html","Results","results"],
+    ["./","Results","results"],
     ["settings.html","Settings","settings"]
   ];
   const handle=document.createElement("button");

@@ -12,7 +12,7 @@
                                over plain REST (no SDK, no writes)
 
    `analyse()` in core.js caches against Store.version, so we stand up a tiny
-   read-only Store shim (see results.html) and bump its version when the data
+   read-only Store shim (see index.html) and bump its version when the data
    set changes. Nothing else in this page touches Store.
    ============================================================ */
 "use strict";
@@ -20,7 +20,7 @@
 /* ---------------- configuration ---------------- */
 const RTDB = "https://topography-of-us-default-rtdb.europe-west1.firebasedatabase.app";
 const EVENT_DEFAULTS = {
-  title: "The Topography of Us",
+  title: "The Mood Topography",
   occasion: "Democracy Month Art Lab",
   venue: "Teder",
   city: "Tel Aviv"
@@ -1602,7 +1602,10 @@ function wire() {
   });
 }
 
-const shareLink = () => location.origin + location.pathname;
+/* Share the directory, not the file. The page is index.html, so pathname ends
+   in "/index.html" — a URL that works but reads as a filepath on a poster. */
+const shareLink = () =>
+  location.origin + location.pathname.replace(/index\.html$/, "");
 
 function openShare() {
   const url = shareLink();
