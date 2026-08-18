@@ -243,9 +243,33 @@ modal and a mess on a 330px phone — measured at that size, 2 pairs of names ov
 dot size scale with the canvas. **The receipt is untouched by this** — print output was
 compared pixel-for-pixel across five paths before and after, and is identical.
 
-It is deliberately **read-only and standalone**: it loads neither `store.js` nor
-`remote-config.js`, writes nothing to localStorage beyond its own theme, and never
-sends on the sync channel. Nothing a visitor does can touch the show.
+It is deliberately **standalone**: it loads neither `store.js` nor `remote-config.js`,
+writes nothing to localStorage beyond its own theme and a session flag, and never sends
+on the sync channel. Nothing a visitor does can touch the show.
+
+The one thing it writes is a visit record — see below. That goes to `/visits`, a node
+nothing subscribes to, precisely so it can never be replayed into the wall.
+
+### The visitor counter
+
+A bare number at the foot of the results page and the 3D view, with no label, because
+the only person it means anything to already knows what it counts. `assets/visits.js`,
+loaded by both.
+
+One record per browser session: `{ t: <epoch ms>, p: "results" | "landscape" }`. That is
+the entire payload — no address, no fingerprint, no referrer, nothing that distinguishes
+one visitor from another. Only that somebody opened a page, and when.
+
+It does not count `?demo=1` or `?visits=1`, since both are the operator's own hatches,
+and a reload inside one session is not a new person.
+
+**`?visits=1` is the "and when" half** — total, first and last, the last hour, the last
+24 hours, a split by page and a count per day. Rendered only for somebody who typed it
+into the address bar, so it can afford to be legible.
+
+Everything in there fails silently. A counter is not worth one pixel of a broken results
+page, so a failure leaves the number blank rather than showing an error to a stranger.
+`sessionStorage` throwing (Safari private browsing) takes the same path.
 
 ### Searching
 

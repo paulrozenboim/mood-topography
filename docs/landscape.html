@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Mood Topography — 3D landscape</title>
-<link rel="stylesheet" href="assets/style.css?v=20260818-dwell">
+<link rel="stylesheet" href="assets/style.css?v=20260818-visits2">
 <style>
   html,body{overflow:hidden}
   #app{position:fixed;inset:0;display:block}
@@ -28,6 +28,14 @@
   .hud .eyebrow{font-size:9px;color:var(--ink-3);letter-spacing:.24em}
   .hud h1{font-size:clamp(16px,2.3vw,26px);font-weight:800;font-variation-settings:'wdth' 116;
     color:var(--ink);margin-top:6px;line-height:1.05;text-shadow:0 2px 8px rgba(0,0,0,.55)}
+  /* A bare number, no label. Almost invisible on purpose. */
+  .hud .visits{margin-top:16px;font-family:'Martian Mono',monospace;font-size:9px;
+    letter-spacing:.2em;color:var(--ink-3);opacity:.3;min-height:11px}
+  .hud .visits:hover{opacity:.7}
+  .visit-detail{opacity:1;font-size:10px;line-height:1.9;letter-spacing:.06em;
+    display:inline-block;padding:10px 12px;background:var(--panel);
+    box-shadow:inset 0 0 0 1px var(--hair);color:var(--ink-2);max-width:min(90vw,420px)}
+  .visit-detail b{color:var(--ink)}
   .hud .meta{font-size:10px;color:var(--ink-3);margin-top:8px;line-height:1.7}
   .hud .meta b{color:var(--ink-2);font-weight:600}
   .hud .keys{font-size:9px;color:var(--ink-3);line-height:1.7}
@@ -112,6 +120,7 @@
          where there is room. On a wide screen it is pinned to the bottom-left,
          opposite the controls. -->
     <div class="keys" id="keysLine"></div>
+    <div class="visits" id="visitCount"></div>
   </div>
   <div class="hud br">
     <div class="control-panel">
@@ -147,10 +156,11 @@
   <div class="corner-btns" id="corners"></div>
 </div>
 
-<script src="assets/icons.js?v=20260818-dwell"></script>
-<script src="assets/remote-config.js?v=20260818-dwell"></script>
-<script src="assets/store.js?v=20260818-dwell"></script>
-<script src="assets/core.js?v=20260818-dwell"></script>
+<script src="assets/icons.js?v=20260818-visits2"></script>
+<script src="assets/visits.js?v=20260818-visits2"></script>
+<script src="assets/remote-config.js?v=20260818-visits2"></script>
+<script src="assets/store.js?v=20260818-visits2"></script>
+<script src="assets/core.js?v=20260818-visits2"></script>
 <script>
 "use strict";
 
@@ -1384,6 +1394,8 @@ addEventListener("resize", paintKeys);
    speak on the sync channel. The page still LISTENS, so it keeps updating live
    while the night runs. */
 Store.sub(()=>{ document.documentElement.dataset.theme = Store.theme; invalidate(); });
+
+initVisits(document.getElementById("visitCount"), "landscape");
 </script>
 </body>
 </html>

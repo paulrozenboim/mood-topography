@@ -1795,3 +1795,8 @@ async function boot() {
 }
 
 boot();
+
+// Independent of boot() on purpose: if the data fetch fails the page still
+// shows its error state, and the counter should still record that somebody
+// turned up to see it.
+initVisits($("visitCount"), "results");
