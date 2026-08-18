@@ -195,6 +195,88 @@ function _analyse(paths){
   const idx = arr=>arr.indexOf(Math.max(...arr));
   const untouched = NODES.filter(n=>traffic[n.id]===0);
 
+  /* ---- convergence -------------------------------------------------------
+     A seven-stop route is one of about 66 billion, so two people tracing the
+     identical thing is not a finding, it is a coincidence — and the bulletins
+     that hunted for exact matches sat silent all night waiting for one. What
+     the room actually produces is overlap: different routes crossing the same
+     ground. These are the numbers for saying that.
+     ------------------------------------------------------------------------ */
+
+  // How many paths TOUCH a station, as opposed to how many times it is visited.
+  // A path that doubles back would otherwise count twice and the percentage
+  // could exceed the room.
+  const touched = new Array(NODES.length).fill(0);
+  for(const p of paths) for(const id of new Set(p.nodes)) touched[id]++;
+
+  // Convergence: the station most journeys ended at, and how many genuinely
+  // different routes got there. "12 arrived, 12 different ways" is the claim.
+  let convergence = null;
+  for(let id=0; id<NODES.length; id++){
+    if(ends[id] < 2) continue;
+    const routes = new Set(paths.filter(p=>p.nodes[p.nodes.length-1]===id).map(p=>p.nodes.join(">")));
+    if(!convergence || ends[id] > convergence.count)
+      convergence = {id, count:ends[id], routes:routes.size};
+  }
+
+  // Divergence: the station most journeys STARTED at, and how many different
+  // places they ended up. Only interesting when they scattered.
+  let divergence = null;
+  for(let id=0; id<NODES.length; id++){
+    if(anchors[id] < 2) continue;
+    const dests = new Set(paths.filter(p=>p.nodes[0]===id).map(p=>p.nodes[p.nodes.length-1]));
+    // Ranked by how far they scattered, not by how many set off. The busiest
+    // anchor is often the least interesting one — five people leaving the same
+    // station for two destinations is a crowd, not a divergence.
+    if(!divergence || dests.size > divergence.dests ||
+       (dests.size === divergence.dests && anchors[id] > divergence.count))
+      divergence = {id, count:anchors[id], dests:dests.size};
+  }
+
+  // Same anchor AND same destination, by different roads. The strongest version
+  // of the whole idea, and it does occur: on 36 real casts, four people went
+  // Conflict to Hope and three of those routes were distinct.
+  let sameEnds = null;
+  const pairMap = new Map();
+  for(const p of paths){
+    const k = p.nodes[0] + ">" + p.nodes[p.nodes.length-1];
+    if(!pairMap.has(k)) pairMap.set(k, []);
+    pairMap.get(k).push(p.nodes.join(">"));
+  }
+  for(const [k, routes] of pairMap){
+    if(routes.length < 2) continue;
+    const [a,b] = k.split(">").map(Number);
+    if(a === b) continue;                       // loops have their own bulletin
+    const distinct = new Set(routes).size;
+    if(!sameEnds || routes.length > sameEnds.count)
+      sameEnds = {a, b, count:routes.length, distinct};
+  }
+
+  // Three stations walked back to back by more than one person. A shared
+  // stretch of road rather than a shared journey — direction-folded, because
+  // crossing the same ground the other way is still the same ground.
+  const runs = new Map();
+  for(const p of paths){
+    for(let i=0;i<p.nodes.length-2;i++){
+      const t=[p.nodes[i],p.nodes[i+1],p.nodes[i+2]];
+      const k=(t[0]<t[2]?t:[...t].reverse()).join(">");
+      runs.set(k,(runs.get(k)||0)+1);
+    }
+  }
+  let sharedRun = null;
+  for(const [k,v] of runs){
+    if(v < 2) continue;
+    if(!sharedRun || v > sharedRun.count) sharedRun = {nodes:k.split(">").map(Number), count:v};
+  }
+
+  // The station the largest share of the room passed through at some point.
+  let crossing = null;
+  if(paths.length >= 4){
+    let best = -1;
+    for(let id=0; id<NODES.length; id++) if(touched[id] > best){ best = touched[id]; crossing = {id, count:best} }
+    if(crossing) crossing.pct = Math.round(100 * crossing.count / paths.length);
+  }
+
   let totalStops=0, longest=null, minimalCount=0, maximalCount=0, recentCount=0;
   const now=Date.now();
   const minimalIds=[], maximalIds=[], recentIds=[];
@@ -317,7 +399,8 @@ function _analyse(paths){
           topTransfer, solitary,
           endCount, loopCount, loopIds, solitaryCount:solitaryIds.length, solitaryIds,
           hingeStation, hingeCount, narrowestTransition,
-          repeatTop, repeatExample};
+          repeatTop, repeatExample,
+          touched, convergence, divergence, sameEnds, sharedRun, crossing};
 }
 
 function bulletins(A){
@@ -380,11 +463,6 @@ function bulletins(A){
       sub:"Station open, unvisited",
       focus:{type:"node", id:u.id, motion:"pulse"}});
   }
-  if(A.avgLen>0 && A.sampleAny.length){
-    out.push({tag:"Average journey", line:`The average journey tonight visits {${A.avgLen.toFixed(1)}} stations.`,
-      sub:`Across ${A.total} paths cast`,
-      focus:{type:"paths", ids:A.sampleAny, motion:"cascade"}});
-  }
   if(A.longest && A.longest.nodes.length>=6){
     // Ties for "the longest" get honest phrasing — several 10-stop paths from different
     // anchors would make the singular version misleading. "Longest journey" the tag,
@@ -396,19 +474,6 @@ function bulletins(A){
       line:`${opener} ran {${A.longest.nodes.length}} stations${anchor}.`,
       sub:A.longest.nodes.map(i=>NODES[i].n).join("  →  "),
       focus:{type:"path", id:A.longest.id, motion:"traverse"}});
-  }
-  if(A.minimalCount>0 && A.sampleMin.length){
-    out.push({tag:"Kept it short", line:`${A.minimalCount} of you kept it to the minimum — just {${MIN_STOPS}} stations.`,
-      sub:"Sometimes the shortest read is the truest one",
-      focus:{type:"paths", ids:A.sampleMin, motion:"cascade"}});
-  }
-  if(A.maximalCount>0 && A.sampleMax.length){
-    // 10 is the path-length cap the tablet enforces, not the count of stations on the
-    // map (36). Old copy said "used every stop available" which read as "visited every
-    // station" — a totally different claim.
-    out.push({tag:"Went the distance", line:`${A.maximalCount} of you traced the full {${MAX_STOPS}}-station limit.`,
-      sub:"The longest route the map allows",
-      focus:{type:"paths", ids:A.sampleMax, motion:"cascade"}});
   }
   const catT=Object.entries(A.catTraffic).sort((a,b)=>b[1]-a[1]);
   if(catT[0][1]>0){
@@ -422,12 +487,6 @@ function bulletins(A){
       sub:"The map is still moving",
       focus:{type:"paths", ids:A.sampleRecent, motion:"cascade"}});
   }
-  if(A.repeatTop && A.repeatExample){
-    out.push({tag:"Well-worn path", accent:NODES[A.repeatExample.nodes[0]].c,
-      line:`${A.repeatTop.count} of you traced the exact same route.`,
-      sub:A.repeatExample.nodes.map(i=>NODES[i].n).join("  →  "),
-      focus:{type:"path", id:A.repeatExample.id, motion:"traverse"}});
-  }
   if(A.edgeList[1] && A.edgeList[1].v>1){
     // Old wording: "${e.v} more of you..." — implies "more of the same edge as
     // the last bulletin", but this is a DIFFERENT edge. Reword to "also walked".
@@ -436,6 +495,64 @@ function bulletins(A){
       line:`${e.v} of you also walked between {${NODES[e.a].n}} and {${NODES[e.b].n}}.`,
       sub:"The second most walked segment tonight",
       focus:{type:"edge", e, motion:"traverse"}});
+  }
+
+  /* ---- convergence bulletins ---------------------------------------------
+     These replaced five that were either arithmetic ("the average journey
+     visits 7.5 stations") or a hunt for identical routes. A seven-stop path is
+     one of sixty-six billion; two people tracing the same one is a coincidence,
+     not a finding, and the bulletin waiting for it stayed silent all night.
+     Nobody walks the same road. Plenty of people walk the same stretch of it,
+     and that is the thing worth saying out loud.
+     ------------------------------------------------------------------------ */
+
+  if(A.convergence && A.convergence.count >= 3){
+    const n = NODES[A.convergence.id], c = A.convergence;
+    out.push({tag:"Convergence", accent:n.c,
+      line: c.routes === c.count
+        ? `{${c.count}} journeys ended at {${n.n}} — and no two took the same road.`
+        : `{${c.count}} journeys ended at {${n.n}}, by {${c.routes}} different roads.`,
+      sub:"Same place, different ways of getting there",
+      focus:{type:"node", id:n.id, motion:"pulse"}});
+  }
+
+  if(A.divergence && A.divergence.count >= 3 && A.divergence.dests >= 2){
+    const n = NODES[A.divergence.id], d = A.divergence;
+    out.push({tag:"Divergence", accent:n.c,
+      line:`{${d.count}} of you started at {${n.n}} and ended in {${d.dests}} different places.`,
+      sub:"Where you begin does not decide where you land",
+      focus:{type:"node", id:n.id, motion:"pulse"}});
+  }
+
+  if(A.sharedRun && A.sharedRun.count >= 2){
+    const [a,b,c] = A.sharedRun.nodes.map(i=>NODES[i]);
+    // The "no two of you" clause is a claim about the data, so it is only made
+    // when the data supports it. A.repeatTop is set the moment any two paths
+    // match exactly, which does happen — rarely, and usually because a route
+    // reads as a story rather than by chance.
+    const allUnique = !A.repeatTop;
+    out.push({tag:"Shared road", accent:b.c,
+      line: allUnique
+        ? `No two of you walked the same route — but {${A.sharedRun.count}} crossed {${a.n}}, {${b.n}} and {${c.n}} back to back.`
+        : `{${A.sharedRun.count}} of you crossed {${a.n}}, {${b.n}} and {${c.n}} back to back.`,
+      sub:"A stretch of road in common",
+      focus:{type:"edge", e:{a:A.sharedRun.nodes[0], b:A.sharedRun.nodes[1], v:A.sharedRun.count}, motion:"traverse"}});
+  }
+
+  if(A.sameEnds && A.sameEnds.count >= 2 && A.sameEnds.distinct >= 2){
+    const a = NODES[A.sameEnds.a], b = NODES[A.sameEnds.b];
+    out.push({tag:"Different roads", accent:b.c,
+      line:`{${A.sameEnds.count}} of you went from {${a.n}} to {${b.n}} — and took {${A.sameEnds.distinct}} different ways to get there.`,
+      sub:"Same start, same end, different road",
+      focus:{type:"node", id:b.id, motion:"pulse"}});
+  }
+
+  if(A.crossing && A.crossing.pct >= 25 && A.total >= 6){
+    const n = NODES[A.crossing.id];
+    out.push({tag:"Common ground", accent:n.c,
+      line:`{${A.crossing.pct}%} of the room passed through {${n.n}} at some point tonight.`,
+      sub:`${A.crossing.count} of ${A.total} journeys, all of them different`,
+      focus:{type:"node", id:n.id, motion:"pulse"}});
   }
 
   // --- New bulletins --------------------------------------------------------
@@ -460,13 +577,6 @@ function bulletins(A){
   }
 
   // Widest span — the path with the largest spatial bounding box
-  if(A.widest && A.widest.nodes.length>=4){
-    const names = A.widest.nodes.map(i=>NODES[i].n);
-    out.push({tag:"Widest reach", accent:NODES[A.widest.nodes[0]].c,
-      line:`One path stretches the widest across the map tonight.`,
-      sub:names.join("  →  "),
-      focus:{type:"path", id:A.widest.id, motion:"traverse"}});
-  }
 
   // Distinct anchors — how many different starting stations
   if(A.anchorCount>=2){
@@ -602,12 +712,16 @@ function castBulletin(newPath, allPaths){
       focus:{type:"path", id:newPath.id, motion:"traverse"}, hold:true};
   }
 
-  // 3. All four mood categories in one path — always worth flagging
+  /* 3. All four mood categories in one path — but only while that is still
+     unusual. Roughly two thirds of paths touch all four, so this used to be the
+     message 13 times in 36 casts, announcing "one of 24 tonight to do so" — a
+     sameness claim, and a dull one by the twenty-fourth time. Past the first
+     few it falls through to something specific about this path instead. */
   const cats = new Set(newPath.nodes.map(i => NODES[i].c));
-  if(cats.size === 4){
-    const priorFour = others.filter(p =>
-      new Set(p.nodes.map(i => NODES[i].c)).size === 4
-    ).length;
+  const priorFour = others.filter(p =>
+    new Set(p.nodes.map(i => NODES[i].c)).size === 4
+  ).length;
+  if(cats.size === 4 && priorFour < 4){
     return {tag:"Full spectrum", accent:dest.c,
       line:`This path touches all four moods — ${priorFour ? "one of "+(priorFour+1) : "the first"} tonight to do so.`,
       sub:newPath.nodes.map(i=>NODES[i].n).join("  →  "),
@@ -638,6 +752,30 @@ function castBulletin(newPath, allPaths){
       line:`This path arrives at {${dest.n}} — where ${sharedEnd + 1} of you have landed tonight.`,
       sub:`A gathering point on the map`,
       focus:{type:"node", id:dest.id, motion:"pulse"}};
+  }
+
+  /* 6b. The stretch this path shares with the most people. Almost always fires
+     once a few paths are down, and it is the personal version of the whole
+     argument: nobody walked your route, but you did not walk it alone either. */
+  if(others.length >= 2){
+    let best = null;
+    for(let i=0; i<newPath.nodes.length-1; i++){
+      const a = newPath.nodes[i], b = newPath.nodes[i+1];
+      let n = 0;
+      for(const o of others){
+        for(let j=0; j<o.nodes.length-1; j++){
+          if((o.nodes[j]===a && o.nodes[j+1]===b) || (o.nodes[j]===b && o.nodes[j+1]===a)){ n++; break }
+        }
+      }
+      if(n > 0 && (!best || n > best.n)) best = {a, b, n};
+    }
+    if(best && best.n >= 2){
+      const A2 = NODES[best.a], B2 = NODES[best.b];
+      return {tag:"Shared road", accent:A2.c,
+        line:`Nobody else traced this route — but {${best.n}} of you walked {${A2.n}} to {${B2.n}}.`,
+        sub:`A stretch of road in common`,
+        focus:{type:"edge", e:{a:best.a, b:best.b, v:best.n+1}, motion:"traverse"}};
+    }
   }
 
   // 7. Stayed entirely on one line
@@ -921,6 +1059,35 @@ function renderConstellation(canvas, nodeIds, theme, opts={}){
     for(let i=0;i<60;i++){
       ctx.beginPath(); ctx.arc(rnd()*cssW, rnd()*cssH, rnd()*1.1+0.3, 0, 7);
       ctx.fillStyle=dark?"#8B939C":"#9AA2A7"; ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /* opts.ghosts — other people's routes, drawn faintly underneath this one.
+     Screen only; the receipt stays a single clean line.
+
+     They are deliberately NOT included in the bounding box above. Letting them
+     widen it would shrink the path you came to look at, and a ghost running off
+     the edge of the frame is the honest picture anyway: everyone else's journey
+     continues past the edges of yours. */
+  if(!print && opts.ghosts && opts.ghosts.length){
+    ctx.save();
+    ctx.globalCompositeOperation = dark ? "lighter" : "multiply";
+    ctx.strokeStyle = dark ? "#7C868F" : "#B9C0C6";
+    ctx.lineWidth = 0.9;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    // Faint enough that ten of them overlapping still sit under the one route
+    // this frame is about. At 0.30 they accounted for two thirds of the ink on
+    // the canvas, which inverts the picture: the crowd shouted over the person.
+    ctx.globalAlpha = dark ? 0.16 : 0.20;
+    for(const g of opts.ghosts){
+      if(!g || g.length < 2) continue;
+      const gs = splinePoints(g.map(i=>({x:NODES[i].x, y:NODES[i].y})), null).map(toS);
+      ctx.beginPath();
+      ctx.moveTo(gs[0].x, gs[0].y);
+      for(let i=1;i<gs.length;i++) ctx.lineTo(gs[i].x, gs[i].y);
+      ctx.stroke();
     }
     ctx.restore();
   }

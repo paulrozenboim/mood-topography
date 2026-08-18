@@ -474,6 +474,61 @@ no paths from the first half of the event and written an incomplete snapshot.
 
 Only the cycling is local. The replay cap is now 5000 as a backstop.
 
+### What the bulletins look for
+
+Five readings were removed and five added, after the first thirty-six real casts showed
+what the data actually contains. **Exact repeats essentially do not happen** — a
+seven-stop route is one of about 66 billion — so "Well-worn path" (`N of you traced the
+exact same route`) waited all night for a coincidence. Three others ("Average journey",
+"Kept it short", "Went the distance") were arithmetic about the data rather than anything
+about the room, and "Widest reach" described one path's geometry.
+
+In their place, five that measure overlap. All five fire on the real 36-cast set:
+
+| tag | what it says on that data |
+|---|---|
+| **Convergence** | 11 journeys ended at Hope, by 10 different roads |
+| **Divergence** | 4 started at Frustration and ended in 4 different places |
+| **Shared road** | 3 crossed Resilience, Vision and Hope back to back |
+| **Different roads** | 4 went Conflict → Hope, by 3 different routes |
+| **Common ground** | 47% of the room passed through Vulnerability |
+
+Computed in `_analyse()` as `convergence`, `divergence`, `sharedRun`, `sameEnds` and
+`crossing`. Two details worth keeping:
+
+- `touched[]` counts how many paths *reach* a station, not how many times it is visited.
+  Using `traffic[]` would let a path that doubles back count twice and push a percentage
+  above the size of the room.
+- **"Shared road" only claims "no two of you walked the same route" when that is true.**
+  `A.repeatTop` is set the moment any two paths match exactly, and it does occasionally
+  happen. The wall must not assert something its own data contradicts.
+
+`castBulletin()` gained the same idea per-cast — the stretch this path shares with the
+most other people — and "Full spectrum" is gated to the first four, because roughly two
+thirds of paths touch all four categories and it was firing 13 times in 36 casts to
+announce "one of 24 tonight to do so".
+
+### The lightbox is a pivot, not a receipt
+
+Opening a journey used to end on "Route traced by this person alone", which is true of
+very nearly every path and therefore says nothing. It now shows the stretch this route
+shares with the most other people, and two **buttons** — *N others started at X*,
+*N others ended at Y* — that close the lightbox and re-filter the whole page onto those
+strangers, leaving a shareable hash like `#q=Hope&pos=end`.
+
+Behind the constellation, up to eight **ghosts**: the routes of others who ended where
+this one did, drawn faintly via `opts.ghosts` in `renderConstellation`. They are
+deliberately excluded from the bounding-box calculation — including them would shrink the
+path you opened the lightbox to look at, and a ghost running off the edge is the honest
+picture anyway. Print ignores them; the receipt stays one clean line.
+
+Tuned by measurement rather than by eye: at the first alpha they were **two thirds of the
+ink on the canvas**, which inverts the picture the frame exists to make. At 0.16 dark /
+0.20 light the path's peak intensity is untouched and the mean halves — present, clearly
+secondary. (If you re-measure this: `renderConstellation` reads `--bg-2` from the live
+document, so you must set `documentElement.dataset.theme` too, not just pass a theme
+argument. Passing `"light"` to a dark document composites onto black and draws nothing.)
+
 ### The wall's views
 
 Six of them, cycled in this order: the whole map, the last twelve journeys, the heaviest

@@ -56,8 +56,19 @@ is a claim that the route mattered, that arriving at Hope by way of Grief is a d
 thing from arriving at it by way of Curiosity, and that a room full of those routes says
 something a room full of destinations wouldn't.
 
-Fifty people who each thought they were describing something private turn out to have
-drawn a shared landscape. That's the whole piece.
+**It is not a piece about everyone turning out to be the same.** A seven-stop route is
+one of about sixty-six billion, and on the first thirty-six real casts, thirty-five were
+unlike any other. Nobody walks your road. Looking for people who did was the wrong
+question, and the readings that hunted for it sat silent all night waiting for a
+coincidence.
+
+What the room actually produces is overlap. Eleven journeys ended at Hope by ten
+different roads. Four set out from Frustration and finished in four different places.
+Forty-seven per cent of the room crossed Vulnerability at some point, no two of them the
+same way. That is the finding, and it is a better one: **shared infrastructure, not
+shared itineraries.** You are not alone on the map, and you are not a copy of anyone on
+it either. The wall says that, and the results page lets you click your own starting
+station to meet the strangers who stood there too.
 
 ## The three surfaces
 

@@ -1350,11 +1350,46 @@ function openJourney(id) {
     const n = NODES[i];
     return `<span><i style="background:${catColor(n.c, S.theme)}"></i>${k + 1}. ${esc(n.n)}</span>`;
   }).join("");
+  /* The facts row used to end on "Route traced by this person alone", which is
+     true of very nearly every path — a seven-stop route is one of about sixty-six
+     billion — and so said nothing. Being unique is the baseline here, not the
+     finding. What is worth knowing is where this path overlapped other people's,
+     which is also somewhere to go next: these two are buttons that pivot the
+     whole page onto the strangers who stood in the same place. */
+  const startId = p.nodes[0], endId = p.nodes[p.nodes.length - 1];
+  const alsoStart = S.paths.filter(x => x !== p && x.nodes[0] === startId).length;
+  const alsoEnd   = S.paths.filter(x => x !== p && x.nodes[x.nodes.length - 1] === endId).length;
+
+  // The stretch of this route that the most other people also walked.
+  let share = null;
+  for (let i = 0; i < p.nodes.length - 1; i++) {
+    const a = p.nodes[i], b = p.nodes[i + 1];
+    let n = 0;
+    for (const o of S.paths) {
+      if (o === p) continue;
+      for (let j = 0; j < o.nodes.length - 1; j++) {
+        if ((o.nodes[j] === a && o.nodes[j + 1] === b) || (o.nodes[j] === b && o.nodes[j + 1] === a)) { n++; break; }
+      }
+    }
+    if (n > 0 && (!share || n > share.n)) share = { a, b, n };
+  }
+
+  const pivot = (kind, id, n) => {
+    const n2 = NODES[id];
+    return `<button class="jpivot" data-pivot="${kind}" data-station="${id}"
+      style="--pc:${catColor(n2.c, S.theme)}">${n} other${n === 1 ? "" : "s"} ${
+        kind === "start" ? "started at" : "ended at"} <b>${esc(n2.n)}</b> &rsaquo;</button>`;
+  };
+
   $("jFacts").innerHTML = [
     `${p.nodes.length} stations`,
     `${new Set(p.nodes.map(i => NODES[i].c)).size} of 4 mood categories`,
-    twins ? `${twins} other${twins === 1 ? "" : "s"} traced this exact route` : "Route traced by this person alone"
-  ].map(t => `<span>${esc(t)}</span>`).join("")
+    share ? `You and ${share.n} other${share.n === 1 ? "" : "s"} walked ${NODES[share.a].n} → ${NODES[share.b].n}`
+          : null,
+    twins ? `${twins} other${twins === 1 ? "" : "s"} traced this exact route` : null
+  ].filter(Boolean).map(t => `<span>${esc(t)}</span>`).join("")
+    + (alsoStart ? pivot("start", startId, alsoStart) : "")
+    + (alsoEnd   ? pivot("end",   endId,   alsoEnd)   : "")
     // The code that was on the receipt, so someone can check they have the
     // right path — and read it back out to a friend. A button rather than a
     // span: selecting text inside a chip on a phone is a fight nobody wins.
@@ -1364,7 +1399,17 @@ function openJourney(id) {
   $("jModal").setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
   $("jModal")._path = p;
-  paintWhenSized($("jCanvas"), () => renderConstellation($("jCanvas"), p.nodes, S.theme));
+  /* Everyone else who ended where this person ended, drawn faintly behind their
+     route. It is the argument made as a picture rather than a sentence: one
+     solid line, and the ghosts of a dozen strangers who arrived at the same
+     place by roads of their own. Capped at eight — past that it stops reading
+     as company and starts reading as noise. */
+  $("jModal")._ghosts = S.paths
+    .filter(x => x !== p && x.nodes[x.nodes.length - 1] === endId)
+    .slice(-8)
+    .map(x => x.nodes);
+  paintWhenSized($("jCanvas"), () =>
+    renderConstellation($("jCanvas"), p.nodes, S.theme, { ghosts: $("jModal")._ghosts }));
 }
 /* Flash a tick on a button for a beat, then put it back. Used by both the copy
    chip and the save button — on a phone neither one produces any visible
@@ -1431,6 +1476,7 @@ function closeJourney() {
   $("jModal").setAttribute("aria-hidden", "true");
   document.body.style.overflow = "";
   $("jModal")._path = null;
+  $("jModal")._ghosts = null;
 }
 
 /* ============================================================
@@ -1480,7 +1526,8 @@ function repaintAll() {
   drawAggregate();
   renderBrowser();
   const p = $("jModal")._path;
-  if (p) paintWhenSized($("jCanvas"), () => renderConstellation($("jCanvas"), p.nodes, S.theme));
+  if (p) paintWhenSized($("jCanvas"), () =>
+    renderConstellation($("jCanvas"), p.nodes, S.theme, { ghosts: $("jModal")._ghosts || [] }));
 }
 
 /* ============================================================
@@ -1626,7 +1673,28 @@ function wire() {
     const p = $("jModal")._path;
     if (p) saveJourneyPNG(p, $("jSave"));
   };
-  // Delegated: the chip is rebuilt every time a journey opens.
+  // Delegated: everything in this row is rebuilt every time a journey opens.
+  $("jFacts").addEventListener("click", ev => {
+    const piv = ev.target.closest(".jpivot");
+    if (!piv) return;
+    // Pivot the page onto everyone who shared this end of the journey, and get
+    // out of the way so they can see it.
+    const id = Number(piv.dataset.station);
+    closeJourney();
+    S.station = null;                       // a map selection would fight this one
+    S.q = NODES[id].n;
+    S.pos = piv.dataset.pivot;              // "start" | "end"
+    S.shown = PAGE_SIZE;
+    $("search").value = S.q;
+    renderMapCue();
+    drawAggregate();
+    renderMapReadout();
+    renderBrowser();
+    renderCharts();
+    syncURL();
+    $("browser").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
   $("jFacts").addEventListener("click", async ev => {
     const btn = ev.target.closest(".jcode");
     if (!btn) return;
