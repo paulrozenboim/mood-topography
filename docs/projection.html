@@ -11,7 +11,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>The Mood Topography — Live wall</title>
-<link rel="stylesheet" href="assets/style.css?v=20260818-manifest">
+<link rel="stylesheet" href="assets/style.css?v=20260818-dwell">
 </head>
 <body>
 <div id="app">
@@ -29,12 +29,12 @@
     <div class="cast-loader" id="castLoader" hidden><span></span></div>
   </div>
 </div>
-<script src="assets/icons.js?v=20260818-manifest"></script>
-<script src="assets/remote-config.js?v=20260818-manifest"></script>
-<script src="assets/store.js?v=20260818-manifest"></script>
-<script src="assets/core.js?v=20260818-manifest"></script>
-<script src="assets/nav.js?v=20260818-manifest"></script>
-<script src="assets/syncpill.js?v=20260818-manifest"></script>
+<script src="assets/icons.js?v=20260818-dwell"></script>
+<script src="assets/remote-config.js?v=20260818-dwell"></script>
+<script src="assets/store.js?v=20260818-dwell"></script>
+<script src="assets/core.js?v=20260818-dwell"></script>
+<script src="assets/nav.js?v=20260818-dwell"></script>
+<script src="assets/syncpill.js?v=20260818-dwell"></script>
 <script>
 "use strict";
 const el=(tag,cls,html)=>{const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e};
@@ -208,6 +208,7 @@ function tick(ts){
     lastSwap=ts; rebuild();
     if(queue.length){ paint(queue[qi%queue.length]); qi++ }
   }
+  rotateView(ts);
   const A=view.A||analyse(activePaths());
   stats.innerHTML=`<div class="stat"><b>${A.real}</b><span>journeys cast</span></div>`+
     `<div class="stat"><b>${A.distinct}</b><span>distinct routes</span></div>`+
@@ -234,15 +235,41 @@ let ai=0;
    fifteen seconds after someone cast would drop their brand-new path straight
    back off the map — which is exactly what it looked like when a path
    "didn't show". */
-let castHoldUntil = 0;
-setInterval(()=>{
-  if(!Store.auto) return;
-  if(performance.now() < castHoldUntil) return;
-  ai=(ai+1)%AUTO.length;
+let castHoldUntil = 0, lastViewSwap = 0;
+
+/* The rotation lives in tick() rather than on its own setInterval so that the
+   dwell time can change under it — Settings sets Store.autoMs and the very next
+   frame uses it, with no timer to tear down. Pausing the bulletin transport
+   holds the view too: they read as one thing from the floor, and "pause" that
+   left the map still cycling was the wrong answer to what the button looks
+   like it does. */
+function rotateView(ts){
+  if(!Store.auto || paused) { lastViewSwap = ts; return }
+  if(ts < castHoldUntil) { lastViewSwap = ts; return }
+  if(ts - lastViewSwap < Store.autoMs) return;
+  lastViewSwap = ts;
+  ai = (ai+1) % AUTO.length;
   Store.setFilter(AUTO[ai], {broadcast:false});
-},14000);
+}
+
+/* Settings can no longer pick a view by hand, so a filter left over from when
+   it could — "blank", say, still sitting in localStorage or arriving in a state
+   handshake from a device that has not been reloaded — would have no way back,
+   and with auto-pilot off it would simply stay there. Anything the rotation
+   does not own is corrected to the full map.
+
+   Checked on every store event, not just at load: the hello/state exchange
+   lands asynchronously and used to overwrite the load-time correction a moment
+   after it ran. Setting {type:"all"} re-enters this through the same handler,
+   where it matches and stops. */
+function normaliseFilter(){
+  if(AUTO.some(f => JSON.stringify(f) === JSON.stringify(Store.filter))) return;
+  Store.setFilter({type:"all"}, {broadcast:false});
+}
+normaliseFilter();
 
 Store.sub(evt=>{
+  normaliseFilter();
   document.documentElement.dataset.theme=Store.theme;
   view.dirty=true;
   if(evt.type==="path" && evt.animate){

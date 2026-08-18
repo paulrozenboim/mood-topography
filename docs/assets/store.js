@@ -8,6 +8,15 @@
 
 const uid = ()=> Math.random().toString(36).slice(2,9);
 
+/* How long the wall holds each view. Floor of 4s because the cast choreography
+   alone runs 12, and anything under a few seconds reads as a flicker rather
+   than a view; ceiling of 2 minutes because past that it isn't rotating. */
+const AUTO_MS_DEFAULT = 15000, AUTO_MS_MIN = 4000, AUTO_MS_MAX = 120000;
+const clampAutoMs = ms => {
+  const n = Math.round(Number(ms));
+  return Number.isFinite(n) ? Math.min(AUTO_MS_MAX, Math.max(AUTO_MS_MIN, n)) : AUTO_MS_DEFAULT;
+};
+
 /* ---------------- Sync transport -----------------------------------------
    LOCAL MODE (default, zero config): BroadcastChannel keeps every open tab on this
    ONE device in sync — exactly how you've been testing so far (tablet + projection
@@ -117,13 +126,15 @@ const Sync = (()=>{
       if(m.k==="filter") Store.setFilter(m.f,{broadcast:false});
       if(m.k==="auto")   Store.setAuto(m.v,{broadcast:false});
       if(m.k==="showDemo") Store.setShowDemo(m.v,{broadcast:false});
+      if(m.k==="autoMs") Store.setAutoMs(m.v,{broadcast:false});
       if(m.k==="theme")  Store.setTheme(m.val,{broadcast:false}); // (older messages carried a `which` field — we ignore it and set the unified theme)
       if(m.k==="clear")  Store.clear({broadcast:false});
       if(m.k==="clearSeeded") Store.clearSeeded({broadcast:false});
-      if(m.k==="hello")  this.send({k:"state",paths:Store.paths,filter:Store.filter,auto:Store.auto,theme:Store.theme,showDemo:Store.showDemo});
+      if(m.k==="hello")  this.send({k:"state",paths:Store.paths,filter:Store.filter,auto:Store.auto,theme:Store.theme,showDemo:Store.showDemo,autoMs:Store.autoMs});
       if(m.k==="state" && Store.paths.length===0){
         Store.replaceAll(m.paths); Store.filter=m.filter; Store.auto=m.auto;
         if(typeof m.showDemo === "boolean") Store.showDemo = m.showDemo;
+        if(typeof m.autoMs === "number") Store.autoMs = m.autoMs;
         // Normalise: an older client might send theme in the legacy shape.
         Store.theme = _initTheme(m.theme);
         Store.emit({type:"reset"});
@@ -159,7 +170,7 @@ function persistNow(){
     if(typeof localStorage==="undefined") return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       paths: Store.paths, filter: Store.filter, auto: Store.auto, theme: Store.theme,
-      showDemo: Store.showDemo
+      showDemo: Store.showDemo, autoMs: Store.autoMs
     }));
   }catch(_){}
 }
@@ -179,6 +190,11 @@ const Store = {
   paths: _persisted?.paths || [],
   filter: _persisted?.filter || {type:"all"},
   auto: _persisted?.auto ?? true,
+  // How long the wall holds each view before rotating. Set from Settings; the
+  // rotation itself is local to the projection (see projection.html), but the
+  // *length* is an operator decision and has to reach it. One message when it
+  // changes, not one every cycle.
+  autoMs: _persisted?.autoMs ?? AUTO_MS_DEFAULT,
   // Rehearsal paths are hidden everywhere by default. The operator turns them
   // on from Settings while there is nothing real to show yet; the flag rides
   // the sync channel so every surface agrees at once.
@@ -205,6 +221,11 @@ const Store = {
   setFilter(f,{broadcast=true}={}){
     this.filter=f; if(broadcast) Sync.send({k:"filter", f});
     this.emit({type:"filter"});
+  },
+  setAutoMs(ms,{broadcast=true}={}){
+    this.autoMs = clampAutoMs(ms);
+    if(broadcast) Sync.send({k:"autoMs", v:this.autoMs});
+    this.emit({type:"autoMs"});
   },
   setAuto(v,{broadcast=true}={}){
     this.auto=v; if(broadcast) Sync.send({k:"auto", v});

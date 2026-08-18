@@ -111,6 +111,7 @@ Live at **paulrozenboim.github.io/mood-topography**.
 1. Open `projection.html` on the wall, `tablet.html` on the kiosk. Both should show a
    green **Live** dot — if one is amber or red, it is not talking to the other.
 2. **Settings → Demo paths → off** before anyone arrives.
+   Set **Seconds per view** there too if 15 feels wrong for the room.
 3. **Settings → Clear demo paths** once there is something real to show.
 4. Reload the kiosk if it has been open since before a deploy — a red band appears when
    it would otherwise print a dead QR code.

@@ -429,10 +429,32 @@ the replay window every other client hydrates from: at `limitToLast(500)` the wi
 held under two hours, so a laptop opened late to freeze the results would have replayed
 no paths from the first half of the event and written an incomplete snapshot.
 
-A manual choice in Settings still broadcasts and still locks the wall. Only the cycling
-is local. The trade is that while auto-pilot is running, Settings no longer highlights
-which view is currently up — it says so on the page. The replay cap is now 5000 as a
-backstop.
+Only the cycling is local. The replay cap is now 5000 as a backstop.
+
+### The wall's views
+
+Six of them, cycled in this order: the whole map, the last twelve journeys, the heaviest
+links, Friction & Resistance alone, the whole map again, Momentum & Vision alone. The
+rotation lives in `tick()` on `projection.html` rather than on its own timer, so the
+dwell time can change under it with nothing to tear down.
+
+Settings used to offer nine hand-pickable views. They were VJ controls for a show that
+turned out to run itself — the only one ever reached for was the on/off — so they are
+gone, replaced by the thing that was actually missing: **Seconds per view**, defaulting
+to 15, clamped to 4–120. The floor is there because the cast choreography alone runs
+twelve seconds and anything shorter reads as a flicker. That setting *does* broadcast,
+but only when the operator changes it, which is not the same as once per cycle.
+
+Rotation holds in three cases: auto-pilot off, the bulletin transport paused from the
+projection's own menu (they read as one thing from the floor, and a pause that left the
+map cycling was the wrong answer to what the button looks like it does), and for the
+whole of a cast.
+
+Because no UI can pick a view by hand any more, `projection.html` corrects any filter the
+rotation does not own — a `blank` left in localStorage, or one arriving in a state
+handshake from a device nobody reloaded — back to the full map. It is checked on every
+store event rather than only at load: the handshake lands asynchronously and used to
+overwrite a load-time correction a moment after it ran.
 
 ## Deploying to GitHub Pages
 
