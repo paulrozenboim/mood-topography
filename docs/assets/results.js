@@ -1044,19 +1044,22 @@ function renderCharts() {
       .filter(r => r.v > 1 && maximal(r, n))
       .slice(0, 8);
     if (!shared.length) continue;
-    const maxV = shared[0].v;
+    // Same row shape as the lightbox's overlap list: a count, the names, a
+    // chevron. The bar that used to sit in here made every row three columns
+    // tall on a phone and the section ran for screens; the rows are sorted by
+    // the count anyway, so the bar was decorating an order you could already
+    // read off the numbers.
     const rows = shared.map(r => {
       const cols = r.ids.map(i => catColor(NODES[i].c, S.theme));
       // Real spaces around the separator: without whitespace the names form one
       // unbreakable token and a narrow column splits it mid-name.
       const names = r.ids.map((i, k) =>
         `<b style="color:${cols[k]}">${esc(NODES[i].n)}</b>`).join(' <em>&rsaquo;</em> ');
-      const grad = cols.length > 1 ? `linear-gradient(90deg,${cols.join(",")})` : cols[0];
-      return `<button class="rs-triple rs-runrow" data-run="${r.ids.join(",")}"
+      return `<button class="jshare rs-runrow" data-run="${r.ids.join(",")}"
           title="Show the ${r.v} journeys that walked this">
-        <span class="rs-trun">${names}</span>
-        <span class="rs-rbar"><i style="width:${(r.v / maxV * 100).toFixed(1)}%;background:${grad}"></i></span>
-        <span class="rs-rval">${r.v}</span>
+        <span class="jshare-n">${r.v}</span>
+        <span class="jshare-run"><span class="jshare-names">${names}</span></span>
+        <span class="jshare-go">&rsaquo;</span>
       </button>`;
     }).join("");
     const title = n === 2 ? "Most-walked segments" : `Shared runs of ${n}`;
@@ -1066,8 +1069,13 @@ function renderCharts() {
       <div class="rs-runs">${rows}</div>
     </div>`);
   }
+  // Said once for the group rather than on every heading: the same row shape
+  // appears in the lightbox counting the other thing (stations, not people),
+  // so each place has to name its own units — but only once.
+  const runsIntro = `<p class="rs-note rs-runsnote">Stretches of the map more than one person
+    walked. The number is how many people; tap a row to see them.</p>`;
   $("runBlocks").innerHTML = runBlocks.length
-    ? runBlocks.join("")
+    ? runsIntro + runBlocks.join("")
     : `<div class="rs-block"><h3>Shared stretches <small>two or more in a row</small></h3>
        <p class="rs-note">No stretch of the map has been walked by more than one person yet.</p></div>`;
 
@@ -1630,13 +1638,20 @@ function renderOverlaps(limit) {
       `<p class="rs-note">No stretch of this route has been walked by anyone else — yet.</p>`;
     return;
   }
-  const deepest = overlaps[0].run.length;
+  /* Each row is somebody's whole journey, so it has to be identified as one.
+     Without the code, three different people who all share "Curiosity ›
+     Unknown" with you produced three identical-looking rows and the list read
+     as a bug. The number is how many stations in a row you had in common — said
+     in the header, because a bare figure in a badge could be anything. */
   const rows = overlaps.slice(0, limit).map(o => {
     const names = o.run.map(i =>
       `<b style="color:${catColor(NODES[i].c, S.theme)}">${esc(NODES[i].n)}</b>`).join(' <em>&rsaquo;</em> ');
     return `<button class="jshare" data-open="${esc(o.path.id)}" title="Open this journey">
       <span class="jshare-n">${o.run.length}</span>
-      <span class="jshare-run">${names}</span>
+      <span class="jshare-run">
+        <span class="jshare-names">${names}</span>
+        <span class="jshare-code">${esc(pathCode(o.path.nodes))}</span>
+      </span>
       <span class="jshare-go">&rsaquo;</span>
     </button>`;
   }).join("");
@@ -1645,7 +1660,7 @@ function renderOverlaps(limit) {
          Show the other ${overlaps.length - limit} <span class="jshare-go">&rsaquo;</span></button>`
     : "";
   $("jShared").innerHTML =
-    `<p class="rs-sharedlabel">Walked with you <span>${overlaps.length} of ${total}</span></p>`
+    `<p class="rs-sharedlabel">Walked with you <span>${overlaps.length} of ${total} journeys &middot; the number is how many stations in a row</span></p>`
     + rows + more;
 }
 

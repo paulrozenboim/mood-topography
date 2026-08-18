@@ -559,6 +559,14 @@ very nearly every path and therefore says nothing. It now carries three ways out
   ranked by how long that stretch is, each one opening that journey. The lightbox becomes
   something you can walk along.
 
+  Each row carries **that journey's path code**. Three different people can share
+  "Curiosity › Unknown" with you, and without the code their rows are identical — the
+  list reads as a rendering bug rather than as three strangers.
+
+  The count in the badge is **stations in a row**. The identical row shape on the run
+  charts counts **people**. Same shape, different units, so each place names its own in
+  its heading; do not let those two drift into using the badge for the same thing.
+
   The first version listed *segments* instead: "Hope › Routine — 2". It named a piece of
   your own route and a number, and left you to work out that the number was people. The
   question worth answering is who came closest to walking with you, and for how far.
@@ -569,6 +577,10 @@ very nearly every path and therefore says nothing. It now carries three ways out
   place is the honest version of the same offer.
 
 The pivot buttons go through `showRun()`, the same entry point the chart rows use.
+
+Order in the modal is deliberate and is not the order these were built in: what the
+journey **is** comes first — title, time, picture, code, its stops — and only then what it
+has in common with other people, the two ends before the overlapping journeys.
 
 ### Two lanes of readings
 

@@ -13,7 +13,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0A0B0D">
-<link rel="stylesheet" href="assets/style.css?v=20260819-tidy3">
+<link rel="stylesheet" href="assets/style.css?v=20260819-rows5">
 <style>
   /* This page scrolls — the rest of the app is fixed-viewport. */
   html,body{height:auto;overflow:auto;overscroll-behavior:auto}
@@ -372,11 +372,7 @@
      bar is the data — and only pick up the affordances of something you can
      press: a pointer, a hover edge, and the count going solid. */
   .rs-runs{display:flex;flex-direction:column}
-  button.rs-runrow{display:flex;align-items:center;gap:10px;width:100%;
-    padding:7px 4px;background:none;text-align:left;font:inherit;color:inherit}
-  button.rs-runrow:hover{background:var(--hair)}
-  button.rs-runrow:hover .rs-rval{color:var(--ink)}
-  button.rs-runrow:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+  .rs-runsnote{margin-bottom:14px;max-width:44ch}
 
   /* ---------- lightbox ---------- */
   .rs-veil{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.72);opacity:0;pointer-events:none;
@@ -422,23 +418,30 @@
   .rs-shared{margin-top:16px}
   .rs-sharedlabel{font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.2em;
     text-transform:uppercase;color:var(--ink-3);margin-bottom:8px;line-height:1.6}
-  .rs-sharedlabel span{color:var(--ink-2);opacity:.8}
-  button.jshare{display:flex;align-items:center;gap:10px;width:100%;padding:7px 8px;
+  .rs-sharedlabel span{display:block;margin-top:3px;color:var(--ink-3);opacity:.8;
+    letter-spacing:.09em;text-transform:none}
+  button.jshare{display:flex;align-items:center;gap:9px;width:100%;padding:6px 8px;
     background:none;text-align:left;color:var(--ink-2);
-    font-family:'Martian Mono',monospace;font-size:9.5px;letter-spacing:.08em;
+    font-family:'Martian Mono',monospace;font-size:8.5px;letter-spacing:.05em;
     text-transform:uppercase;box-shadow:inset 0 -1px 0 var(--hair)}
   button.jshare:hover{background:var(--hair);color:var(--ink)}
   button.jshare:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
   .jshare em{font-style:normal;color:var(--ink-3);padding:0 2px}
-  /* How many stations in a row — the number is the whole point of the row, so
-     it leads rather than trailing off the end. */
-  .jshare-n{flex:none;width:22px;height:22px;display:inline-flex;align-items:center;
-    justify-content:center;color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums;
-    box-shadow:inset 0 0 0 1px var(--hair)}
-  .jshare-run{flex:1 1 auto;min-width:0;line-height:1.6}
-  .jshare-run b{font-weight:700}
-  .jshare-go{flex:none;color:var(--ink-3);font-size:13px}
+  /* The count leads. What it counts differs by context — stations in a row in
+     the lightbox, people on the charts — so each block's heading says which. */
+  .jshare-n{flex:none;width:20px;height:20px;display:inline-flex;align-items:center;
+    justify-content:center;color:var(--ink);font-weight:700;font-size:9.5px;
+    font-variant-numeric:tabular-nums;box-shadow:inset 0 0 0 1px var(--hair)}
+  .jshare-run{flex:1 1 auto;min-width:0;line-height:1.45;
+    display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .jshare-names{min-width:0;overflow-wrap:break-word}
+  .jshare-names b{font-weight:600;white-space:nowrap}
+  /* Which journey this row is. Three people can share the same stretch with
+     you, and without this their rows are indistinguishable. */
+  .jshare-code{flex:none;color:var(--ink-3);opacity:.75;letter-spacing:.1em}
+  .jshare-go{flex:none;color:var(--ink-3);font-size:12px}
   button.jshare:hover .jshare-go{color:var(--ink)}
+  button.jshare:hover .jshare-code{color:var(--ink-2)}
   .jshare-all{justify-content:space-between;color:var(--ink-3);box-shadow:none;margin-top:4px}
 
   /* The two ends, side by side, so the pair reads as one question with two
@@ -804,10 +807,14 @@
         <canvas id="jCanvas"></canvas>
         <button type="button" id="jSave" title="Save as image" aria-label="Save as image" class="rs-save"></button>
       </div>
+      <!-- Order matters here and it is not the order these were built in.
+           What the journey IS comes first — title, when, picture, code, the
+           stops in order — and only then what it has in common with other
+           people: the two ends, then the journeys that walked part of it. -->
       <div class="rs-facts" id="jFacts"></div>
-      <div class="rs-shared" id="jShared"></div>
-      <div class="rs-pivots" id="jPivots"></div>
       <div class="rs-stops" id="jStops"></div>
+      <div class="rs-pivots" id="jPivots"></div>
+      <div class="rs-shared" id="jShared"></div>
     </div>
   </div>
 </div>
@@ -827,10 +834,10 @@
      transport is loaded, so the page can never write back to the show. */
   window.Store = { version: 0, paths: [], theme: "dark", filter: { type: "all" } };
 </script>
-<script src="assets/icons.js?v=20260819-tidy3"></script>
-<script src="assets/core.js?v=20260819-tidy3"></script>
-<script src="assets/qrcode.min.js?v=20260819-tidy3"></script>
-<script src="assets/visits.js?v=20260819-tidy3"></script>
-<script src="assets/results.js?v=20260819-tidy3"></script>
+<script src="assets/icons.js?v=20260819-rows5"></script>
+<script src="assets/core.js?v=20260819-rows5"></script>
+<script src="assets/qrcode.min.js?v=20260819-rows5"></script>
+<script src="assets/visits.js?v=20260819-rows5"></script>
+<script src="assets/results.js?v=20260819-rows5"></script>
 </body>
 </html>
