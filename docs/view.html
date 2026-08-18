@@ -11,7 +11,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>The Mood Topography — Your constellation</title>
-<link rel="stylesheet" href="assets/style.css?v=20260818-visits2">
+<link rel="stylesheet" href="assets/style.css?v=20260818-kiosk2">
 <style>
   html,body{overflow:auto}
   .viewer{min-height:100vh;display:flex;flex-direction:column;padding:22px;gap:14px;max-width:640px;margin:0 auto}
@@ -122,7 +122,7 @@
        heading, QR to the results page, path code. Hidden on screen, where the
        QR lives behind the Share button instead. -->
   <div class="print-qr" id="printQRWrap" aria-hidden="true">
-    <div class="print-cta">See the whole map</div>
+    <div class="print-cta">See the results</div>
     <canvas id="printQR"></canvas>
     <div class="print-code">
       <span>Your path code</span>
@@ -160,11 +160,11 @@
   </div>
 </div>
 
-<script src="assets/icons.js?v=20260818-visits2"></script>
-<script src="assets/remote-config.js?v=20260818-visits2"></script>
-<script src="assets/store.js?v=20260818-visits2"></script>
-<script src="assets/core.js?v=20260818-visits2"></script>
-<script src="assets/qrcode.min.js?v=20260818-visits2"></script>
+<script src="assets/icons.js?v=20260818-kiosk2"></script>
+<script src="assets/remote-config.js?v=20260818-kiosk2"></script>
+<script src="assets/store.js?v=20260818-kiosk2"></script>
+<script src="assets/core.js?v=20260818-kiosk2"></script>
+<script src="assets/qrcode.min.js?v=20260818-kiosk2"></script>
 <script>
 "use strict";
 const wrap=document.getElementById("wrap");
@@ -214,7 +214,9 @@ if(!ids.length){
   // Print-only QR — points at the results page with this path already found,
   // matching what the kiosk prints. Built from PUBLIC_BASE, not location.href:
   // an archive reprint may well be running off a laptop's LAN address.
-  renderQR(document.getElementById("printQR"), resultsURLFor(ids), 150);
+  // PUBLIC_BASE, not resultsURLFor(ids) — matches the kiosk receipt exactly.
+  // The QR opens the results; the printed code is what finds this one path.
+  renderQR(document.getElementById("printQR"), PUBLIC_BASE, 150);
   document.getElementById("printCode").textContent = pathCode(ids);
   document.getElementById("viewCode").textContent = pathCode(ids);
   const paintStops = () => {
@@ -268,12 +270,18 @@ if(!ids.length){
 
   // Print flow (thermal-friendly print CSS above kicks in on window.print()).
   printBtn.onclick = () => window.print();
-  window.addEventListener("beforeprint", drawPrint);
-  window.addEventListener("afterprint", drawScreen);
+  // The deferred draws are guarded because the print dialog freezes rAF: a
+  // callback scheduled on the way in does not run until the dialog closes,
+  // which is after afterprint has restored the screen render. Unguarded, the
+  // print draw landed last and the constellation stayed at receipt size on a
+  // white ground. Same bug, same fix, as tablet.html.
+  let printing = false;
+  window.addEventListener("beforeprint", ()=>{ printing = true;  drawPrint() });
+  window.addEventListener("afterprint",  ()=>{ printing = false; drawScreen() });
   try{
     matchMedia("print").addEventListener("change", e => {
-      if(e.matches) requestAnimationFrame(drawPrint);
-      else requestAnimationFrame(drawScreen);
+      printing = e.matches;
+      requestAnimationFrame(()=>{ printing ? drawPrint() : drawScreen() });
     });
   }catch(_){}
 

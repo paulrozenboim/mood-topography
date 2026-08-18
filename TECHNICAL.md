@@ -66,12 +66,13 @@ been cast.
 
 ## The printed receipt
 
-Every receipt carries a QR to the **results page** with that person's path already
-found, and the same path as a typed code underneath:
+Every receipt carries a QR to the **results page** and the path as a typed code
+underneath. The two do different jobs on purpose — **the QR opens everyone's map, the
+code finds yours**:
 
 ```
-        SEE THE WHOLE MAP
-             [ QR ]              → …/mood-topography/#q=MT-45FVYX
+         SEE THE RESULTS
+             [ QR ]              → …/mood-topography/
       ┌──────────────────┐
       │  YOUR PATH CODE  │
       │    MT-45FVYX     │
@@ -80,9 +81,27 @@ found, and the same path as a typed code underneath:
     to find your route again
 ```
 
-Scanning opens the collective map with their route picked out of it; clearing the search
-leaves them in everyone else's. The code is the fallback for anyone who doesn't scan, and
-it is also what they read out to a friend.
+The QR used to carry `#q=<their code>`, so scanning landed on the collective map with
+their own route already picked out of it. It read well in theory and badly in the room:
+the journey gallery showed a single card, which looks like the whole gallery, and nobody
+scrolled past it. It now opens the page unfiltered. Anyone who wants their own route back
+types the code — which is also what they read out to a friend. Receipts already printed
+with `#q=` still resolve, since the search box has not changed.
+
+**The kiosk screen shows no QR**, only the code. The receipt in the participant's hand
+carries the same one and the operator hands it over; a second copy on the glass only made
+the modal taller and invited people to scan a tablet they were about to give back. The
+code stays on screen because if the printer jams, that box is the only thing left.
+
+### Printing leaves the canvas in print mode
+
+`beforeprint` schedules a deferred redraw as a backup for browsers that apply print styles
+late — but **the print dialog freezes `requestAnimationFrame`.** On Chrome the callback did
+not run until the dialog closed, which is *after* `afterprint` had already restored the
+screen render, so the print draw landed last and stayed: the constellation sat at 249px on
+a white ground, a third of its box, until the modal was reopened. Both `tablet.html` and
+`view.html` now carry a `printing` flag that the deferred draw checks. If you add another
+deferred draw around printing, guard it the same way.
 
 **`PUBLIC_BASE` in `docs/assets/core.js` is the URL that gets printed.** It is
 deliberately not derived from `location`: the kiosk usually runs off a LAN address, and a

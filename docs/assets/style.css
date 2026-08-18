@@ -312,7 +312,15 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   gap:8px 14px;align-items:center;padding:12px;box-shadow:inset 0 0 0 1px var(--hair)}
 .keepsake-cta{grid-column:1/-1;font-family:'Martian Mono',monospace;font-size:9px;
   font-weight:400;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3)}
-.keepsake canvas{flex:none;background:#fff;padding:6px;display:block}
+/* The kiosk shows no QR. The receipt in the participant's hand carries the same
+   one, and the operator hands that over — a second copy on the glass only made
+   the modal taller and invited people to scan a tablet they were about to give
+   back. It is still printed; this hides it on screen only. The path code stays
+   visible, because if the printer jams that box is the only thing left. */
+.keepsake canvas{display:none}
+@media print{ .keepsake canvas{flex:none;background:#fff;padding:6px;display:block} }
+.keepsake{grid-template-columns:minmax(0,1fr)}
+@media print{ .keepsake{grid-template-columns:auto minmax(0,1fr)} }
 .keepsake-text{min-width:0}
 .keepsake-text p{margin-top:6px;font-family:'Martian Mono',monospace;font-size:10.5px;
   line-height:1.55;color:var(--ink-2)}

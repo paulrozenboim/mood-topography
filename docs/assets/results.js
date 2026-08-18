@@ -632,8 +632,21 @@ function showFilterToast(id) {
      <b style="color:${catColor(n.c, S.theme)}">${esc(n.n)}</b>`);
 }
 
+/* The instruction above the map is the only place that can say how to undo the
+   thing it just told you to do. Tapping a station filters half the page; until
+   this, nothing on screen said that tapping the empty map puts it back, and a
+   filtered page with no visible way out reads as a broken one. */
+function renderMapCue() {
+  const el = $("mapCue");
+  if (!el) return;
+  el.innerHTML = S.station == null
+    ? "Select any station to reveal the journeys that passed through it."
+    : `Filtered to <b>${esc(NODES[S.station].n)}</b> — tap it again, or anywhere else on the map, to clear.`;
+}
+
 function selectStation(id, announce) {
   S.station = id;
+  renderMapCue();
   drawAggregate();
   renderMapReadout();
   renderBrowser();
@@ -1463,6 +1476,7 @@ function repaintAll() {
   renderBulletins();
   renderCharts();
   renderMapReadout();
+  renderMapCue();
   drawAggregate();
   renderBrowser();
   const p = $("jModal")._path;
@@ -1767,6 +1781,7 @@ async function boot() {
   renderBulletins();
   renderCharts();
   renderMapReadout();
+  renderMapCue();
   renderBrowser();
 
   /* Arrived from a printed QR. Deliberately no auto-scroll: the hero and the

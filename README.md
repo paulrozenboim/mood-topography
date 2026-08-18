@@ -78,7 +78,7 @@ people passed through it.
 ## The receipt
 
 ```
-        SEE THE WHOLE MAP
+         SEE THE RESULTS
              [ QR ]
       ┌──────────────────┐
       │  YOUR PATH CODE  │
@@ -87,6 +87,11 @@ people passed through it.
   Enter it under "Every journey"
     to find your route again
 ```
+
+The two halves do different jobs. The **QR opens everyone's map**; the **code finds
+yours**. It used to be one job — the QR arrived pre-filtered to the scanner's own path,
+which meant a gallery of exactly one card, and people read that as the whole thing and
+never scrolled.
 
 The physical object matters. It is the part that leaves the building — a private artefact
 of a public act, and the thing that lets someone find their own route again a week later

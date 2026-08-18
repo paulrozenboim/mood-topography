@@ -11,7 +11,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>The Mood Topography — Cast your path</title>
-<link rel="stylesheet" href="assets/style.css?v=20260818-visits2">
+<link rel="stylesheet" href="assets/style.css?v=20260818-kiosk2">
 <style>
   .kiosk-head{position:relative}
   .undo-row{display:flex;gap:8px;margin-top:9px}
@@ -75,11 +75,11 @@
       <!-- Three direct children in reading order — heading, QR, text. On paper
            the grid collapses to one column and they stack exactly like this. -->
       <div class="keepsake" id="mKeepsake" style="display:none">
-        <div class="keepsake-cta">See the whole map</div>
+        <div class="keepsake-cta">See the results</div>
         <canvas id="mQR"></canvas>
         <div class="keepsake-text">
-          <p class="screen-only">Scan to open tonight's results. Every path cast so far is
-            there &mdash; including yours.</p>
+          <p class="screen-only">Your receipt has a QR to tonight's results &mdash; every path
+            cast so far is there, including yours.</p>
           <div class="pathcode">
             <span class="pathcode-label">Your path code</span>
             <b id="mCode"></b>
@@ -99,12 +99,12 @@
   </div>
 </div>
 
-<script src="assets/icons.js?v=20260818-visits2"></script>
-<script src="assets/remote-config.js?v=20260818-visits2"></script>
-<script src="assets/store.js?v=20260818-visits2"></script>
-<script src="assets/core.js?v=20260818-visits2"></script>
-<script src="assets/qrcode.min.js?v=20260818-visits2"></script>
-<script src="assets/syncpill.js?v=20260818-visits2"></script>
+<script src="assets/icons.js?v=20260818-kiosk2"></script>
+<script src="assets/remote-config.js?v=20260818-kiosk2"></script>
+<script src="assets/store.js?v=20260818-kiosk2"></script>
+<script src="assets/core.js?v=20260818-kiosk2"></script>
+<script src="assets/qrcode.min.js?v=20260818-kiosk2"></script>
+<script src="assets/syncpill.js?v=20260818-kiosk2"></script>
 <script>
 "use strict";
 const el=(tag,cls,html)=>{const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e};
@@ -273,14 +273,26 @@ const redrawForCurrentSize = (print=false) => {
     renderConstellation(star, lastCastIds, Store.theme, print ? {print:true} : {});
   }
 };
+/* `printing` exists because of a real ordering bug, not for tidiness. The rAF
+   below is a backup draw for browsers that apply print styles late — but the
+   print dialog freezes rAF, so on Chrome the callback did not run until the
+   dialog CLOSED, which is after afterprint had already restored the screen
+   render. The print draw then landed last and stayed: the constellation sat
+   there at 249px on a white ground, a third of its box, until the modal was
+   reopened. Guarding the deferred draw is the whole fix. */
+let printing = false;
 window.addEventListener("beforeprint", ()=>{
+  printing = true;
   redrawForCurrentSize(true);
   // rAF gives the browser a beat to apply print styles if it hasn't yet
-  requestAnimationFrame(()=>redrawForCurrentSize(true));
+  requestAnimationFrame(()=>{ if(printing) redrawForCurrentSize(true) });
 });
-window.addEventListener("afterprint", ()=>redrawForCurrentSize(false));
+window.addEventListener("afterprint", ()=>{ printing = false; redrawForCurrentSize(false) });
 try{
-  matchMedia("print").addEventListener("change", e => { redrawForCurrentSize(e.matches) });
+  matchMedia("print").addEventListener("change", e => {
+    printing = e.matches;
+    redrawForCurrentSize(e.matches);
+  });
 }catch(_){}                                            // pre-2020 Safari doesn't support addEventListener on MQL
 
 const drawConstellation=(ids)=> renderConstellation(star, ids, Store.theme);
@@ -333,7 +345,11 @@ function castNow(ns){
   // clearing the filter leaves them in everyone else's. Built from PUBLIC_BASE
   // rather than location.href — the kiosk may be on a LAN address that means
   // nothing to a phone once it leaves the building.
-  renderQR(mQR, resultsURLFor(ns), 140);
+  // The bare results page, NOT resultsURLFor(ns). A QR that arrived pre-filtered
+  // to one path showed a gallery of exactly one card, and people read that as
+  // the whole thing and never scrolled. The printed code is how someone finds
+  // their own route again; the QR is how they find everyone else's.
+  renderQR(mQR, PUBLIC_BASE, 140);
   mCode.textContent = pathCode(ns);
   mKeepsake.style.display = "grid";
   // The constellation box just gave up height to the keepsake, so the drawing

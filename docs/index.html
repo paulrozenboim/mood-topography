@@ -13,7 +13,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0A0B0D">
-<link rel="stylesheet" href="assets/style.css?v=20260818-visits2">
+<link rel="stylesheet" href="assets/style.css?v=20260818-kiosk2">
 <style>
   /* This page scrolls — the rest of the app is fixed-viewport. */
   html,body{height:auto;overflow:auto;overscroll-behavior:auto}
@@ -121,6 +121,7 @@
   /* Tightened: the map follows the hero directly, so this section carries no
      heading of its own — the hero already said what it is. */
   #map{padding-top:clamp(22px,3.4vw,38px)}
+  .rs-mapcue b{color:var(--ink);font-weight:700}
   .rs-mapcue{margin-bottom:10px;font-family:'Martian Mono',monospace;font-size:10px;
     letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);line-height:1.6}
   .rs-mapbox{position:relative;aspect-ratio:16/9;background:var(--bg-2);
@@ -480,7 +481,7 @@
 
   <!-- ============ the map ============ -->
   <section id="map">
-    <p class="rs-mapcue">Select any station to reveal the journeys that passed through it.</p>
+    <p class="rs-mapcue" id="mapCue">Select any station to reveal the journeys that passed through it.</p>
     <div class="rs-mapbox" id="mapBox">
       <canvas id="mapCanvas"></canvas>
       <button class="rs-btn icon-only" type="button" id="mapExpand" aria-label="Expand map"></button>
@@ -750,10 +751,10 @@
      transport is loaded, so the page can never write back to the show. */
   window.Store = { version: 0, paths: [], theme: "dark", filter: { type: "all" } };
 </script>
-<script src="assets/icons.js?v=20260818-visits2"></script>
-<script src="assets/core.js?v=20260818-visits2"></script>
-<script src="assets/qrcode.min.js?v=20260818-visits2"></script>
-<script src="assets/visits.js?v=20260818-visits2"></script>
-<script src="assets/results.js?v=20260818-visits2"></script>
+<script src="assets/icons.js?v=20260818-kiosk2"></script>
+<script src="assets/core.js?v=20260818-kiosk2"></script>
+<script src="assets/qrcode.min.js?v=20260818-kiosk2"></script>
+<script src="assets/visits.js?v=20260818-kiosk2"></script>
+<script src="assets/results.js?v=20260818-kiosk2"></script>
 </body>
 </html>
