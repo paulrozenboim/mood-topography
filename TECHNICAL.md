@@ -306,7 +306,17 @@ The search box takes three shapes, decided by what's typed — no mode to set fi
   containing it), **same stations, any order**, or **this exact route only** (the whole
   journey and nothing more).
 - **A path code** (`MT-4ISJWX`) — the code printed on the receipt. Case, the dash and
-  stray spaces are all forgiven.
+  stray spaces are all forgiven, and **the prefix is optional**: `4isjwx` works.
+
+  The prefix cannot simply be dropped, because the base36 alphabet and the station names
+  are the same letters — `hope` is both a station and a valid four-stop path (h, o, p, e).
+  A bare code has to earn it on two conditions a station name can never meet at once: it
+  resolves to no station, *and* what it decodes to is a journey actually in this set. A
+  typo meets neither and falls through to the ordinary text search.
+
+  Watch out for `resolveStation()` here: it always returns an object — `{node}` on a hit,
+  `{ambiguous}` or `{miss}` otherwise — so its truthiness says nothing. Testing the return
+  value rather than `.node` is what made the first version of this silently never fire.
 - **A keepsake link** — pasted whole. Still works for links handed out earlier.
 
 A line under the box states in plain English what the current query means. Everything —
@@ -520,6 +530,13 @@ that is 2 and 3; the page grows a "Shared runs of 5" heading the first time five
 worth of road lines up, and loses it again if the data never gets there.
 
 Every row is a button that opens the journeys that walked it.
+
+**Only maximal runs are listed.** Four people walking the same nine stations also walk the
+same eight, seven, six, and so on down to two — so listing every length printed one
+finding eight times, each block a little shorter than the last. A run earns a row only if
+you cannot extend it by a station and keep the same number of people; if you can, the
+longer row already said it. On the rehearsal set this collapses eight blocks to four, and
+an eight-station run absorbs the 5, 6 and 7 blocks entirely.
 
 **The counts are direction-folded, so the search a row opens has to be too.** That is what
 the `run` order mode is for: back to back, either direction. Without it a row saying 6

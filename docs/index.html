@@ -13,7 +13,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0A0B0D">
-<link rel="stylesheet" href="assets/style.css?v=20260819-rows3">
+<link rel="stylesheet" href="assets/style.css?v=20260819-tidy3">
 <style>
   /* This page scrolls — the rest of the app is fixed-viewport. */
   html,body{height:auto;overflow:auto;overscroll-behavior:auto}
@@ -267,12 +267,15 @@
      the width and are allowed to wrap, and the bar shrinks to a marker. The
      single-line ellipsis the two-station rows use would cut "VULNERABILITY ›
      ADAPTATION › RESILIENCE" down to the first word on a phone. */
-  .rs-triple{display:grid;grid-template-columns:minmax(0,1fr) 54px 26px;align-items:center;
-    gap:10px;padding:7px 4px;font-family:'Martian Mono',monospace;font-size:9.5px;
-    letter-spacing:.05em}
+  /* Smaller than the other charts on purpose. A run row carries up to ten
+     station names, and at the 9.5px the two-name rows use it turned into a
+     paragraph pretending to be a data row. */
+  .rs-triple{display:grid;grid-template-columns:minmax(0,1fr) 44px 22px;align-items:center;
+    gap:9px;padding:5px 4px;font-family:'Martian Mono',monospace;font-size:8.5px;
+    letter-spacing:.04em}
   /* The names are joined with real spaces, so ordinary wrapping breaks between
      stations. Only a single name too wide for the column ever splits. */
-  .rs-trun{min-width:0;text-transform:uppercase;line-height:1.5;overflow-wrap:break-word}
+  .rs-trun{min-width:0;text-transform:uppercase;line-height:1.45;overflow-wrap:break-word}
   .rs-trun b{font-weight:600;white-space:nowrap}
   .rs-trun em{font-style:normal;color:var(--ink-3)}
   .rs-triple .rs-rval{color:var(--ink);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
@@ -403,15 +406,6 @@
   .rs-facts .jcode:hover .icon{color:var(--ink)}
   .rs-facts .jcode.done{box-shadow:inset 0 0 0 1px var(--line-c)}
 
-  /* The two pivot buttons. They sit in the same row as the plain facts but read
-     as actions, not statements — a left rule in the station's own colour, and a
-     chevron saying this goes somewhere. */
-  .rs-facts .jpivot{display:inline-flex;align-items:center;gap:7px;
-    font-family:'Martian Mono',monospace;font-size:9.5px;letter-spacing:.1em;
-    text-transform:uppercase;padding:5px 9px;background:none;color:var(--ink-2);
-    box-shadow:inset 0 0 0 1px var(--hair);border-left:2px solid var(--pc,var(--ink-3))}
-  .rs-facts .jpivot b{color:var(--ink);font-weight:700}
-  .rs-facts .jpivot:hover{color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink-3)}
   .rs-facts .jcode.done .icon{color:var(--line-c)}
 
   /* Save the picture. A canvas has no long-press-to-save, so without this
@@ -428,8 +422,7 @@
   .rs-shared{margin-top:16px}
   .rs-sharedlabel{font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.2em;
     text-transform:uppercase;color:var(--ink-3);margin-bottom:8px;line-height:1.6}
-  .rs-sharedlabel span{display:block;letter-spacing:.1em;color:var(--ink-3);opacity:.75;
-    text-transform:none}
+  .rs-sharedlabel span{color:var(--ink-2);opacity:.8}
   button.jshare{display:flex;align-items:center;gap:10px;width:100%;padding:7px 8px;
     background:none;text-align:left;color:var(--ink-2);
     font-family:'Martian Mono',monospace;font-size:9.5px;letter-spacing:.08em;
@@ -447,6 +440,20 @@
   .jshare-go{flex:none;color:var(--ink-3);font-size:13px}
   button.jshare:hover .jshare-go{color:var(--ink)}
   .jshare-all{justify-content:space-between;color:var(--ink-3);box-shadow:none;margin-top:4px}
+
+  /* The two ends, side by side, so the pair reads as one question with two
+     halves rather than as a list that happens to be short today. */
+  .rs-pivots{margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  @media(max-width:460px){.rs-pivots{grid-template-columns:1fr}}
+  .rs-pivots .jpivot{display:flex;align-items:center;gap:7px;width:100%;padding:8px 10px;
+    background:none;text-align:left;color:var(--ink-2);
+    font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.09em;
+    text-transform:uppercase;line-height:1.5;
+    box-shadow:inset 0 0 0 1px var(--hair);border-left:2px solid var(--pc,var(--ink-3))}
+  .rs-pivots .jpivot b{color:var(--ink);font-weight:700;font-size:12px;font-variant-numeric:tabular-nums}
+  .rs-pivots .jpivot:hover{color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink-3)}
+  .rs-pivots .jpivot.off{opacity:.4;border-left-color:var(--hair);cursor:default}
+  .rs-pivots .jpivot.off:hover{color:var(--ink-2);box-shadow:inset 0 0 0 1px var(--hair)}
 
   .rs-stops{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;padding-bottom:18px}
   .rs-stops span{display:inline-flex;align-items:center;gap:6px;font-family:'Martian Mono',monospace;
@@ -628,7 +635,7 @@
       <div class="rs-searchrow">
         <div class="rs-field">
           <input id="search" type="text" enterkeyhint="search" autocomplete="off" spellcheck="false"
-                 placeholder="MT-4ISJWX · or Fear · or Fear › Hope" aria-label="Search journeys">
+                 placeholder="MT-4ISJWX · or Fear · or Fear, Hope" aria-label="Search journeys">
           <button type="button" id="searchClear" aria-label="Clear search">&times;</button>
         </div>
         <div class="rs-selects">
@@ -799,6 +806,7 @@
       </div>
       <div class="rs-facts" id="jFacts"></div>
       <div class="rs-shared" id="jShared"></div>
+      <div class="rs-pivots" id="jPivots"></div>
       <div class="rs-stops" id="jStops"></div>
     </div>
   </div>
@@ -819,10 +827,10 @@
      transport is loaded, so the page can never write back to the show. */
   window.Store = { version: 0, paths: [], theme: "dark", filter: { type: "all" } };
 </script>
-<script src="assets/icons.js?v=20260819-rows3"></script>
-<script src="assets/core.js?v=20260819-rows3"></script>
-<script src="assets/qrcode.min.js?v=20260819-rows3"></script>
-<script src="assets/visits.js?v=20260819-rows3"></script>
-<script src="assets/results.js?v=20260819-rows3"></script>
+<script src="assets/icons.js?v=20260819-tidy3"></script>
+<script src="assets/core.js?v=20260819-tidy3"></script>
+<script src="assets/qrcode.min.js?v=20260819-tidy3"></script>
+<script src="assets/visits.js?v=20260819-tidy3"></script>
+<script src="assets/results.js?v=20260819-tidy3"></script>
 </body>
 </html>

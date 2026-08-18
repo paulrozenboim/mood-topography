@@ -1020,9 +1020,29 @@ function renderCharts() {
      Every row is a button. The counts are direction-folded, so the search a row
      opens is too ("run" order): otherwise a row saying 6 would open a list of 4
      and the page would be caught lying about its own chart. */
+  /* Only MAXIMAL runs. Four people walking the same nine stations also walk the
+     same eight, seven, six … all the way down, so listing every length prints
+     the same finding eight times in eight blocks, each a little shorter than
+     the last. A run earns a row only if you cannot extend it by one station and
+     keep the same number of people — if you can, the longer one already said it.
+     This is what stops the section growing a redundant block per length. */
+  const maximal = (r, n) => {
+    const longer = runs(S.paths, n + 1);
+    const key = ids => { const f = ids.join(">"), b2 = ids.slice().reverse().join(">"); return f <= b2 ? f : b2; };
+    for (const cand of longer) {
+      if (cand.v !== r.v) continue;
+      // r is inside cand if it is cand's first or last n stations, either way round.
+      const head = cand.ids.slice(0, n), tail = cand.ids.slice(1);
+      if (key(head) === key(r.ids) || key(tail) === key(r.ids)) return false;
+    }
+    return true;
+  };
+
   const runBlocks = [];
   for (let n = 2; n <= MAX_STOPS; n++) {
-    const shared = runs(S.paths, n).filter(r => r.v > 1).slice(0, 10);
+    const shared = runs(S.paths, n)
+      .filter(r => r.v > 1 && maximal(r, n))
+      .slice(0, 8);
     if (!shared.length) continue;
     const maxV = shared[0].v;
     const rows = shared.map(r => {
@@ -1074,9 +1094,34 @@ function codeFromQuery(q) {
   const printed = parsePathCode(q);
   if (printed.length >= MIN_STOPS) return printed;
   const m = q.match(/(?:^|[#&?])p=([0-9a-z]+)/i) || (/view\.html/i.test(q) && q.match(/([0-9a-z]{3,10})\s*$/i));
-  if (!m) return null;
-  const ids = decodePath(m[1].toLowerCase());
-  return ids.length >= MIN_STOPS ? ids : null;
+  if (m) {
+    const ids = decodePath(m[1].toLowerCase());
+    if (ids.length >= MIN_STOPS) return ids;
+  }
+
+  /* A code typed without its prefix. People read "MT-476F5BGEIR" off paper and
+     type the half that looks like the code, so the prefix has to be optional.
+     It cannot simply be optional, though: the base36 alphabet and the station
+     names are the same letters, and "hope" is both a station and a valid
+     four-stop path (h, o, p, e). That collision is the whole reason for the
+     prefix.
+
+     So the bare form has to earn it, on two conditions that a station name can
+     never meet at once: it resolves to no station, AND what it decodes to is a
+     journey that is actually in this set. A typo lands on neither and falls
+     through to the ordinary text search, which is the right place for it. */
+  const bare = q.trim().toLowerCase();
+  if (!/^[0-9a-z]{3,12}$/.test(bare)) return null;
+  // resolveStation always returns an object — {node} on a hit, {ambiguous} or
+  // {miss} otherwise — so the truthiness of the return says nothing. Only a
+  // resolved node, or an ambiguous prefix that could still become one, should
+  // stop this being read as a code.
+  const asStation = resolveStation(bare);
+  if (asStation.node || asStation.ambiguous) return null;
+  const ids = decodePath(bare);
+  if (ids.length < MIN_STOPS) return null;
+  const key = ids.join(">");
+  return S.paths.some(p => p.nodes.join(">") === key) ? ids : null;
 }
 
 /* Anything a person might reasonably type between two station names. No
@@ -1292,7 +1337,7 @@ function renderSearchModes(Q, routeOK) {
       const bad = Q.bad.map(b => `“${esc(b)}”`).join(", ");
       note.innerHTML = `<b>No single station matches ${bad}.</b> Type more of the name — station names are things like Fear, Vulnerability, Hope.`;
     } else {
-      const names = Q.ids.map(i => `<b>${esc(NODES[i].n)}</b>`).join(" &rsaquo; ");
+      const names = Q.ids.map(i => `<b>${esc(NODES[i].n)}</b>`).join(", ");
       note.innerHTML = S.order === "exact"
         ? `Journeys that are exactly ${names} and nothing else.`
         : S.order === "any"
@@ -1470,28 +1515,30 @@ function openJourney(id) {
   }
   overlaps.sort((a, b) => b.run.length - a.run.length || (b.path.t || 0) - (a.path.t || 0));
 
+  /* Both ends are always shown, even at zero. Rendering only the ones with
+     matches meant a journey whose start nobody shared simply had no "started
+     at" row — which reads as the feature being missing rather than the number
+     being nought. A dead one is greyed and does nothing. */
   const pivot = (kind, id, n) => {
     const n2 = NODES[id];
-    return `<button class="jpivot" data-pivot="${kind}" data-station="${id}"
-      style="--pc:${catColor(n2.c, S.theme)}">${n} other${n === 1 ? "" : "s"} ${
-        kind === "start" ? "started at" : "ended at"} <b>${esc(n2.n)}</b> &rsaquo;</button>`;
+    const verb = kind === "start" ? "started at" : "ended at";
+    return `<button class="jpivot${n ? "" : " off"}" ${n ? "" : "disabled "}data-pivot="${kind}" data-station="${id}"
+      style="--pc:${catColor(n2.c, S.theme)}"><b>${n}</b> ${n === 1 ? "other" : "others"} ${verb} ${esc(n2.n)}</button>`;
   };
 
-  $("jFacts").innerHTML = [
-    `${p.nodes.length} stations`,
-    `${new Set(p.nodes.map(i => NODES[i].c)).size} of 4 mood categories`,
-    twins ? `${twins} other${twins === 1 ? "" : "s"} traced this exact route` : null
-  ].filter(Boolean).map(t => `<span>${esc(t)}</span>`).join("")
-    + (alsoStart ? pivot("start", startId, alsoStart) : "")
-    + (alsoEnd   ? pivot("end",   endId,   alsoEnd)   : "");
+  /* Stripped back. This row used to carry "10 stations" — countable from the
+     stop list immediately below it — and "4 of 4 mood categories", which is
+     true of roughly two thirds of journeys and so distinguishes nothing. What
+     is left is the code, which is the one thing somebody came here for, and the
+     rare exact-twin note. */
+  $("jFacts").innerHTML =
+    (twins ? `<span>${esc(twins + " other" + (twins === 1 ? "" : "s") + " traced this exact route")}</span>` : "")
+    + `<button class="jcode" data-code="${esc(pathCode(p.nodes))}"
+         title="Copy path code">${esc(pathCode(p.nodes))}${Icons.copy}</button>`;
+  $("jPivots").innerHTML = pivot("start", startId, alsoStart) + pivot("end", endId, alsoEnd);
 
   $("jModal")._overlaps = overlaps;
   renderOverlaps(TOP_OVERLAPS)
-    // The code that was on the receipt, so someone can check they have the
-    // right path — and read it back out to a friend. A button rather than a
-    // span: selecting text inside a chip on a phone is a fight nobody wins.
-    + `<button type="button" class="jcode" data-code="${esc(pathCode(p.nodes))}"
-         title="Copy path code">${esc(pathCode(p.nodes))}${Icons.copy}</button>`;
   $("jModal").classList.add("on");
   $("jModal").setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
@@ -1568,7 +1615,7 @@ function saveJourneyPNG(p, btn) {
   if (btn) btn.innerHTML = Icons.check;
 }
 
-const TOP_OVERLAPS = 6;
+const TOP_OVERLAPS = 3;
 /* Rendered separately so "show the rest" can re-run it with a bigger limit.
    The earlier version offered "see all N in the grid", which filtered on the
    path's FIRST segment — an arbitrary two stations that had nothing to do with
@@ -1598,8 +1645,7 @@ function renderOverlaps(limit) {
          Show the other ${overlaps.length - limit} <span class="jshare-go">&rsaquo;</span></button>`
     : "";
   $("jShared").innerHTML =
-    `<p class="rs-sharedlabel">Journeys that walked with you`
-    + `<span>${overlaps.length} of ${total} share a stretch of road &middot; longest ${deepest} stations in a row</span></p>`
+    `<p class="rs-sharedlabel">Walked with you <span>${overlaps.length} of ${total}</span></p>`
     + rows + more;
 }
 
@@ -1825,9 +1871,9 @@ function wire() {
     if (b.dataset.open) { openJourney(b.dataset.open); return; }
   });
 
-  $("jFacts").addEventListener("click", ev => {
+  $("jPivots").addEventListener("click", ev => {
     const piv = ev.target.closest(".jpivot");
-    if (!piv) return;
+    if (!piv || piv.disabled) return;
     // Pivot the page onto everyone who shared this end of the journey, and get
     // out of the way so they can see it.
     const id = Number(piv.dataset.station);
