@@ -538,11 +538,32 @@ very nearly every path and therefore says nothing. It now carries three ways out
 - two **pivot buttons** — *N others started at X*, *N others ended at Y* — that close the
   lightbox and re-filter the page onto those strangers, leaving a hash like
   `#q=Hope&pos=end`;
-- **every road this journey shares with somebody else**, not just the busiest one, each a
-  button opening exactly those journeys. "You and 4 others walked this" is half an offer
-  until you can go and meet the four.
+- **the journeys that walked with you** — every other path that shares a stretch of road,
+  ranked by how long that stretch is, each one opening that journey. The lightbox becomes
+  something you can walk along.
 
-Both go through `showRun()`, the same entry point the chart rows use.
+  The first version listed *segments* instead: "Hope › Routine — 2". It named a piece of
+  your own route and a number, and left you to work out that the number was people. The
+  question worth answering is who came closest to walking with you, and for how far.
+
+  It shows six and expands. An earlier "see all N in the grid" button filtered on the
+  path's **first segment** — two arbitrary stations with nothing to do with the journeys
+  it had just counted, so it named one number and showed a different set. Expanding in
+  place is the honest version of the same offer.
+
+The pivot buttons go through `showRun()`, the same entry point the chart rows use.
+
+### Two lanes of readings
+
+The strip is two rows drifting against each other, readings alternating between them so
+neither ends up carrying all the long cards. One row is a ticker; two moving opposite ways
+reads as a field of things being said at once, which is nearer to what the wall feels like
+in the room. The second lane is `aria-hidden` — same readings, split for rhythm, and a
+screen reader should hear each once. It hides itself when there is not enough for two.
+
+Each lane keeps its own pause state, so hovering one does not stop the other. The
+right-drifting lane is parked on the seam between the duplicated copies at start-up,
+because it has nowhere to go from a `scrollLeft` of 0.
 
 Behind the constellation, up to eight **ghosts**: the routes of others who ended where
 this one did, drawn faintly via `opts.ghosts` in `renderConstellation`. They are

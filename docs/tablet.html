@@ -11,7 +11,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>The Mood Topography — Cast your path</title>
-<link rel="stylesheet" href="assets/style.css?v=20260819-runs2">
+<link rel="stylesheet" href="assets/style.css?v=20260819-rows3">
 <style>
   .kiosk-head{position:relative}
   .undo-row{display:flex;gap:8px;margin-top:9px}
@@ -75,16 +75,23 @@
       <!-- Three direct children in reading order — heading, QR, text. On paper
            the grid collapses to one column and they stack exactly like this. -->
       <div class="keepsake" id="mKeepsake" style="display:none">
-        <div class="keepsake-cta">See the results</div>
+        <!-- Two headings, one per medium. On paper it labels the QR beneath it;
+             on the glass there is no QR, so it confirms instead of pointing. -->
+        <div class="keepsake-cta"><span class="screen-only">Cast to the wall</span><span class="print-only">See the results</span></div>
         <canvas id="mQR"></canvas>
         <div class="keepsake-text">
-          <p class="screen-only">Your receipt has a QR to tonight's results &mdash; every path
-            cast so far is there, including yours.</p>
+          <!-- The QR is on the printed receipt, not on this screen, so the copy
+               here can stop pointing at it and do the thing a person actually
+               needs at this moment: confirm the path went somewhere. -->
+          <p class="screen-only"><b>Your path is on the wall.</b> It joins every other journey
+            cast tonight, and it stays on the results map afterwards.</p>
           <div class="pathcode">
             <span class="pathcode-label">Your path code</span>
             <b id="mCode"></b>
           </div>
-          <p class="codehint">Enter it under &ldquo;Every journey&rdquo; to find your route again.</p>
+          <p class="codehint screen-only">Keep your receipt &mdash; scan it later to find your
+            route among everyone else's.</p>
+          <p class="codehint print-only">Enter it under &ldquo;Every journey&rdquo; to find your route again.</p>
         </div>
       </div>
       <div class="print-credits credits" aria-hidden="true">
@@ -99,12 +106,12 @@
   </div>
 </div>
 
-<script src="assets/icons.js?v=20260819-runs2"></script>
-<script src="assets/remote-config.js?v=20260819-runs2"></script>
-<script src="assets/store.js?v=20260819-runs2"></script>
-<script src="assets/core.js?v=20260819-runs2"></script>
-<script src="assets/qrcode.min.js?v=20260819-runs2"></script>
-<script src="assets/syncpill.js?v=20260819-runs2"></script>
+<script src="assets/icons.js?v=20260819-rows3"></script>
+<script src="assets/remote-config.js?v=20260819-rows3"></script>
+<script src="assets/store.js?v=20260819-rows3"></script>
+<script src="assets/core.js?v=20260819-rows3"></script>
+<script src="assets/qrcode.min.js?v=20260819-rows3"></script>
+<script src="assets/syncpill.js?v=20260819-rows3"></script>
 <script>
 "use strict";
 const el=(tag,cls,html)=>{const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e};

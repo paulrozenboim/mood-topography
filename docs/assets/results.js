@@ -649,7 +649,10 @@ function renderMapCue() {
    the row that was pressed — the charts fold direction and this has to as well. */
 function showRun(ids, opts = {}) {
   S.station = null;                 // a map selection would fight the route query
-  S.q = ids.map(i => NODES[i].n).join(" › ");
+  // A comma, not "›". The parser has always taken either, but the box has to
+   // hold something a person can actually type back — nobody has › on a phone
+   // keyboard, and seeing it in the field implies it is required.
+  S.q = ids.map(i => NODES[i].n).join(", ");
   S.order = "run";
   S.pos = "any";
   S.shown = PAGE_SIZE;
@@ -805,7 +808,11 @@ function renderBulletins() {
   // The strip shows everything — horizontal space is not a budget the way
   // vertical space was, so there is nothing to hide behind a "show more".
   const shown = list;
-  $("bulletins").innerHTML = shown.map(b => {
+  // Alternate rather than halve: each row then carries a mix of long and short
+  // cards, so neither ends up visibly the heavier one.
+  const rowA = shown.filter((_, i) => i % 2 === 0);
+  const rowB = shown.filter((_, i) => i % 2 === 1);
+  const cardHTML = list2 => list2.map(b => {
     // A line like "One person went this way" is deictic — it only lands if you
     // can see the way. Where a bulletin points at one specific path, draw it.
     const p = b.focus && b.focus.type === "path" ? S.paths.find(x => x.id === b.focus.id) : null;
@@ -818,11 +825,18 @@ function renderBulletins() {
       ${p ? `<span class="rs-bthumb"><canvas></canvas></span>` : ""}
     </article>`;
   }).join("");
+
+  $("bulletins").innerHTML  = cardHTML(rowA);
+  $("bulletins2").innerHTML = cardHTML(rowB);
   // Rewriting innerHTML replaces the children but leaves the track's own
   // attributes alone, so the "already duplicated" flag has to be cleared by
   // hand — otherwise a theme flip left a single un-doubled run and the drift
   // ran off the end into blank space.
   delete $("bulletins").dataset.doubled;
+  delete $("bulletins2").dataset.doubled;
+  // Hidden when there is not enough for a second lane — an empty strip under a
+  // full one just looks broken.
+  $("marquee2").hidden = !rowB.length;
 
   $("bulletinsSection").hidden = !list.length;
   // Duplicate the run first, then paint — the clones carry their own canvases
@@ -841,11 +855,24 @@ function renderBulletins() {
 const MARQUEE_PXPS = 30;      // drift speed, px per second
 const MARQUEE_RESUME = 10000; // how long a hand-scroll holds the drift off
 
-let marquee = { raf: 0, last: 0, paused: false, idle: 0, wired: false };
+/* One state object per lane. `dir` is +1 for the strip whose content slides
+   left and -1 for the one that slides right; everything else is identical,
+   which is why this is a loop and not two copies of the same code. */
+const MARQUEE_LANES = [
+  { el: "marquee",  track: "bulletins",  dir:  1 },
+  { el: "marquee2", track: "bulletins2", dir: -1 }
+];
+let marquee = { raf: 0, last: 0, lanes: MARQUEE_LANES.map(() => ({ paused: false, idle: 0 })) };
 
 function setupMarquee() {
-  const el = $("marquee"), track = $("bulletins");
-  if (!el || !track.children.length) return;
+  MARQUEE_LANES.forEach(setupLane);
+  startMarquee();
+}
+
+function setupLane(lane, i) {
+  const el = $(lane.el), track = $(lane.track);
+  if (!el || !track || !track.children.length) return;
+  const st = marquee.lanes[i];
 
   // The drift wraps by resetting to the start once the first copy has passed,
   // so the run has to be duplicated or the reset would be visible as a jump.
@@ -861,26 +888,26 @@ function setupMarquee() {
     });
   }
 
-  if (marquee.wired) return;
-  marquee.wired = true;
+  if (el.dataset.wired) return;
+  el.dataset.wired = "1";
 
   // Any hand-scroll parks the drift for MARQUEE_RESUME and then it picks up
   // again on its own. That timer is the only control a touch device has —
   // there is no pointer to leave — so it has to be long enough to read a card
   // without the strip creeping away underneath.
-  const hold = () => { marquee.paused = true; marquee.idle = MARQUEE_RESUME; };
+  const hold = () => { st.paused = true; st.idle = MARQUEE_RESUME; };
   // Hover is a mouse-only signal: on touch, pointerenter fires on tap and would
   // read as a permanent stop with nothing to undo it.
-  el.addEventListener("pointerenter", ev => { if (ev.pointerType === "mouse") { marquee.paused = true; marquee.idle = 0; } });
-  el.addEventListener("pointerleave", ev => { if (ev.pointerType === "mouse") marquee.paused = false; });
+  el.addEventListener("pointerenter", ev => { if (ev.pointerType === "mouse") { st.paused = true; st.idle = 0; } });
+  el.addEventListener("pointerleave", ev => { if (ev.pointerType === "mouse") st.paused = false; });
   el.addEventListener("pointerdown", hold);
   el.addEventListener("wheel", hold, { passive: true });
   el.addEventListener("touchmove", hold, { passive: true });
   // Deliberately no "scroll" listener: the drift moves scrollLeft itself, so
   // that would fire on every frame and park the animation permanently. The
   // three events above already cover every way a person can move the strip.
-  el.addEventListener("focusin", () => { marquee.paused = true; marquee.idle = 0; });
-  el.addEventListener("focusout", () => { marquee.paused = false; });
+  el.addEventListener("focusin", () => { st.paused = true; st.idle = 0; });
+  el.addEventListener("focusout", () => { st.paused = false; });
 
   // Drag-to-scroll with a mouse — the strip looks grabbable, so it should be.
   let drag = null;
@@ -893,27 +920,31 @@ function setupMarquee() {
     el.scrollLeft = drag.left - (ev.clientX - drag.x);
   });
   addEventListener("pointerup", () => { drag = null; });
-
-  startMarquee();
 }
 
 function marqueeFrame(now) {
   marquee.raf = 0;
-  const el = $("marquee"), track = $("bulletins");
-  if (!el || !track) return;
   const dt = Math.min(0.05, (now - (marquee.last || now)) / 1000);
   marquee.last = now;
 
-  if (marquee.idle > 0) {
-    marquee.idle -= dt * 1000;
-    if (marquee.idle <= 0) marquee.paused = false;
-  }
-  if (!marquee.paused) {
+  MARQUEE_LANES.forEach((lane, i) => {
+    const el = $(lane.el), track = $(lane.track), st = marquee.lanes[i];
+    if (!el || !track || el.hidden || !track.children.length) return;
+    if (st.idle > 0) {
+      st.idle -= dt * 1000;
+      if (st.idle <= 0) st.paused = false;
+    }
+    if (st.paused) return;
     const half = track.scrollWidth / 2;
-    let next = el.scrollLeft + MARQUEE_PXPS * dt;
-    if (half > 0 && next >= half) next -= half;
+    if (half <= 0) return;
+    let next = el.scrollLeft + lane.dir * MARQUEE_PXPS * dt;
+    // Wrap at both ends: the right-drifting lane walks backwards, so it needs
+    // the same trick mirrored or it stalls against zero.
+    if (next >= half) next -= half;
+    if (next < 0) next += half;
     el.scrollLeft = next;
-  }
+  });
+
   marquee.raf = requestAnimationFrame(marqueeFrame);
 }
 
@@ -921,6 +952,13 @@ function startMarquee() {
   stopMarquee();
   if (reducedMotion()) return;   // still hand-scrollable, just never moves itself
   marquee.last = 0;
+  // The right-drifting lane has nowhere to go from a scrollLeft of 0, so park it
+  // on the seam between the two copies and let it walk back from there.
+  MARQUEE_LANES.forEach(lane => {
+    if (lane.dir >= 0) return;
+    const el = $(lane.el), track = $(lane.track);
+    if (el && track && track.scrollWidth) el.scrollLeft = track.scrollWidth / 2;
+  });
   marquee.raf = requestAnimationFrame(marqueeFrame);
 }
 function stopMarquee() {
@@ -933,7 +971,7 @@ function stopMarquee() {
    route in its `sub` line anyway. */
 const THUMB_LABEL_MIN_W = 380;
 function paintBulletinThumbs() {
-  $("bulletins").querySelectorAll(".rs-bulletin.has-path").forEach(card => {
+  document.querySelectorAll("#bulletins .rs-bulletin.has-path, #bulletins2 .rs-bulletin.has-path").forEach(card => {
     const p = S.paths.find(x => x.id === card.dataset.open);
     const cv = card.querySelector("canvas");
     if (!p || !cv) return;
@@ -1288,12 +1326,12 @@ function renderSearchModes(Q, routeOK) {
         : S.pos === "start" ? `Journeys that began at ${name}.`
           : S.pos === "end" ? `Journeys that ended at ${name}.`
             : S.pos === "mid" ? `Journeys that crossed ${name} on the way to somewhere else.`
-              : `Every journey that touched ${name}. Chain stations with <b>&rsaquo;</b> to search a route instead.`;
+              : `Every journey that touched ${name}. Separate stations with a <b>comma</b> to search a route instead.`;
     return;
   }
 
   row.hidden = true;
-  note.innerHTML = `<b>Have a path code from the night?</b> Enter it here &mdash; it looks like <b>MT-4ISJWX</b>. Otherwise: type a station to find every journey through it, then narrow by the part it played. Chain stations with <b>&rsaquo;</b> (or a dash) to search a route: <b>Fear &rsaquo; Vulnerability &rsaquo; Hope</b>.`;
+  note.innerHTML = `<b>Have a path code from the night?</b> Enter it here &mdash; it looks like <b>MT-4ISJWX</b>. Otherwise: type a station to find every journey through it, then narrow by the part it played. Separate stations with a <b>comma</b> to search a route: <b>Fear, Vulnerability, Hope</b>.`;
 }
 
 /* A mode with no subject left to act on is a trap: it stays armed, invisible,
@@ -1400,22 +1438,37 @@ function openJourney(id) {
   const alsoStart = S.paths.filter(x => x !== p && x.nodes[0] === startId).length;
   const alsoEnd   = S.paths.filter(x => x !== p && x.nodes[x.nodes.length - 1] === endId).length;
 
-  /* Every segment of this route that somebody else also walked — not just the
-     busiest. Each becomes a button: "you and 4 others walked this" is only half
-     an offer until you can go and see the four. */
-  const shared = [];
-  for (let i = 0; i < p.nodes.length - 1; i++) {
-    const a = p.nodes[i], b = p.nodes[i + 1];
-    let n = 0;
-    for (const o of S.paths) {
-      if (o === p) continue;
-      for (let j = 0; j < o.nodes.length - 1; j++) {
-        if ((o.nodes[j] === a && o.nodes[j + 1] === b) || (o.nodes[j] === b && o.nodes[j + 1] === a)) { n++; break; }
+  /* Other people's journeys, ranked by the longest stretch of road they share
+     with this one. The first version of this listed *segments* — "Hope › Routine
+     2" — which answered a question nobody asked: it named a piece of your own
+     route and a number, and left you to work out that the number was people.
+     What you actually want to know is who came closest to walking with you, and
+     for how far. So: journeys, longest overlap first, each one openable.
+     Direction-folded, because a road walked the other way is the same road. */
+  const overlaps = [];
+  for (const o of S.paths) {
+    if (o === p) continue;
+    let best = null;
+    // Longest run of p that appears back-to-back in o, either way round.
+    for (let i = 0; i < p.nodes.length; i++) {
+      for (let len = p.nodes.length - i; len >= 2; len--) {
+        if (best && len <= best.length) break;          // can't beat what we have
+        const seq = p.nodes.slice(i, i + len);
+        const rev = seq.slice().reverse();
+        const has = q => {
+          for (let k = 0; k + q.length <= o.nodes.length; k++) {
+            let ok = true;
+            for (let j = 0; j < q.length; j++) if (o.nodes[k + j] !== q[j]) { ok = false; break; }
+            if (ok) return true;
+          }
+          return false;
+        };
+        if (has(seq) || has(rev)) { best = seq; break; }
       }
     }
-    if (n > 0) shared.push({ a, b, n });
+    if (best) overlaps.push({ path: o, run: best });
   }
-  shared.sort((x, y) => y.n - x.n);
+  overlaps.sort((a, b) => b.run.length - a.run.length || (b.path.t || 0) - (a.path.t || 0));
 
   const pivot = (kind, id, n) => {
     const n2 = NODES[id];
@@ -1432,19 +1485,8 @@ function openJourney(id) {
     + (alsoStart ? pivot("start", startId, alsoStart) : "")
     + (alsoEnd   ? pivot("end",   endId,   alsoEnd)   : "");
 
-  // Every stretch of this route somebody else walked, each one a way in to them.
-  $("jShared").innerHTML = shared.length
-    ? `<p class="rs-sharedlabel">Roads you share &mdash; tap to meet the others</p>` +
-      shared.map(sg => {
-        const ca = catColor(NODES[sg.a].c, S.theme), cb = catColor(NODES[sg.b].c, S.theme);
-        return `<button class="jshare" data-run="${sg.a},${sg.b}"
-            title="Show the ${sg.n} other journey${sg.n === 1 ? "" : "s"} that walked this">
-          <span class="jshare-line" style="background:linear-gradient(90deg,${ca},${cb})"></span>
-          ${esc(NODES[sg.a].n)} <em>&rsaquo;</em> ${esc(NODES[sg.b].n)}
-          <b>${sg.n}</b>
-        </button>`;
-      }).join("")
-    : `<p class="rs-note">No stretch of this route has been walked by anyone else — yet.</p>`
+  $("jModal")._overlaps = overlaps;
+  renderOverlaps(TOP_OVERLAPS)
     // The code that was on the receipt, so someone can check they have the
     // right path — and read it back out to a friend. A button rather than a
     // span: selecting text inside a chip on a phone is a fight nobody wins.
@@ -1526,12 +1568,48 @@ function saveJourneyPNG(p, btn) {
   if (btn) btn.innerHTML = Icons.check;
 }
 
+const TOP_OVERLAPS = 6;
+/* Rendered separately so "show the rest" can re-run it with a bigger limit.
+   The earlier version offered "see all N in the grid", which filtered on the
+   path's FIRST segment — an arbitrary two stations that had nothing to do with
+   the ten journeys the button had just counted. It named a number and then
+   showed a different set. Expanding the list in place is the honest version of
+   the same offer. */
+function renderOverlaps(limit) {
+  const overlaps = $("jModal")._overlaps || [];
+  const total = S.paths.length - 1;
+  if (!overlaps.length) {
+    $("jShared").innerHTML =
+      `<p class="rs-note">No stretch of this route has been walked by anyone else — yet.</p>`;
+    return;
+  }
+  const deepest = overlaps[0].run.length;
+  const rows = overlaps.slice(0, limit).map(o => {
+    const names = o.run.map(i =>
+      `<b style="color:${catColor(NODES[i].c, S.theme)}">${esc(NODES[i].n)}</b>`).join(' <em>&rsaquo;</em> ');
+    return `<button class="jshare" data-open="${esc(o.path.id)}" title="Open this journey">
+      <span class="jshare-n">${o.run.length}</span>
+      <span class="jshare-run">${names}</span>
+      <span class="jshare-go">&rsaquo;</span>
+    </button>`;
+  }).join("");
+  const more = overlaps.length > limit
+    ? `<button class="jshare jshare-all" data-more="${overlaps.length}">
+         Show the other ${overlaps.length - limit} <span class="jshare-go">&rsaquo;</span></button>`
+    : "";
+  $("jShared").innerHTML =
+    `<p class="rs-sharedlabel">Journeys that walked with you`
+    + `<span>${overlaps.length} of ${total} share a stretch of road &middot; longest ${deepest} stations in a row</span></p>`
+    + rows + more;
+}
+
 function closeJourney() {
   $("jModal").classList.remove("on");
   $("jModal").setAttribute("aria-hidden", "true");
   document.body.style.overflow = "";
   $("jModal")._path = null;
   $("jModal")._ghosts = null;
+  $("jModal")._overlaps = null;
 }
 
 /* ============================================================
@@ -1701,15 +1779,17 @@ function wire() {
   };
   $("toastClose").onclick = hideToast;
 
-  // bulletins that point at a single path open it, like a card
-  $("bulletins").addEventListener("click", ev => {
-    const c = ev.target.closest("[data-open]"); if (!c) return;
-    openJourney(c.dataset.open);
-  });
-  $("bulletins").addEventListener("keydown", ev => {
-    if (ev.key !== "Enter" && ev.key !== " ") return;
-    const c = ev.target.closest("[data-open]"); if (!c) return;
-    ev.preventDefault(); openJourney(c.dataset.open);
+  // bulletins that point at a single path open it, like a card — both lanes
+  ["bulletins", "bulletins2"].forEach(id => {
+    $(id).addEventListener("click", ev => {
+      const c = ev.target.closest("[data-open]"); if (!c) return;
+      openJourney(c.dataset.open);
+    });
+    $(id).addEventListener("keydown", ev => {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      const c = ev.target.closest("[data-open]"); if (!c) return;
+      ev.preventDefault(); openJourney(c.dataset.open);
+    });
   });
 
   // cards
@@ -1739,8 +1819,10 @@ function wire() {
   $("jShared").addEventListener("click", ev => {
     const b = ev.target.closest(".jshare");
     if (!b) return;
-    closeJourney();
-    showRun(b.dataset.run.split(",").map(Number));
+    // Straight from one journey to the next without a trip through the grid —
+    // the lightbox becomes something you can walk along.
+    if (b.dataset.more) { renderOverlaps(Number(b.dataset.more)); return; }
+    if (b.dataset.open) { openJourney(b.dataset.open); return; }
   });
 
   $("jFacts").addEventListener("click", ev => {

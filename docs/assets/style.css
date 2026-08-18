@@ -328,6 +328,20 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   color:var(--ink-3);letter-spacing:.02em;word-break:break-all;text-decoration:none}
 .keepsake-url:hover{color:var(--ink)}
 
+.keepsake-text .print-only,
+.keepsake-cta .print-only{display:none}
+
+/* On screen the keepsake is one centred column: the QR that used to sit beside
+   this text is printed only, so a left-aligned block now hangs off the side of
+   an empty grid cell. */
+.keepsake{justify-items:center;text-align:center}
+.keepsake-text{text-align:center}
+.keepsake .pathcode{align-items:center}
+@media print{
+  .keepsake{justify-items:stretch;text-align:left}
+  .keepsake-text{text-align:center}
+}
+
 /* The path code — the half of the receipt that gets typed rather than scanned.
    Boxed and letter-spaced because it is read off thermal paper, often in a dark
    room, and then keyed into a phone. */
@@ -438,6 +452,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     width:30mm!important;height:30mm!important;margin:1.8mm auto 0!important;padding:0!important}
   .keepsake-text{display:block!important;text-align:center;width:100%}
   .keepsake-text .screen-only{display:none!important}
+  .keepsake-text .print-only{display:block}
+  .keepsake-cta .screen-only{display:none!important}
+  .keepsake-cta .print-only{display:inline}
   .pathcode{display:block!important;margin:3mm auto 0!important;padding:1.5mm 2mm!important;
     box-shadow:none!important;border:1px solid #000!important;width:fit-content}
   .pathcode-label{display:block!important;font-size:6pt!important;letter-spacing:.16em!important;
