@@ -1,6 +1,17 @@
 # The Mood Topography
 
-A live data-sculpture for Democracy Month Art Lab at Teder, Tel Aviv. Participants
+A live data-sculpture for **Who Cares**, the final exhibition of the מה זה משנה art lab,
+shown at the Manifest Festival at Teder — Beit Romano, Derech Yaffo 9, Tel Aviv,
+19 August 2026.
+
+The event is named in one place per surface and nowhere else: `EVENT_DEFAULTS` in
+`assets/results.js` (and the matching block in the Freeze payload in `settings.html`) for
+anything read off the data, and the print-credit rows in `tablet.html` / `view.html` for
+the receipt. Keep it **Latin-only** — the bundled Archivo and Martian Mono carry no Hebrew
+glyphs, so the lab's Hebrew name comes out as tofu on a 72mm thermal roll. "Who Cares" is
+the exhibition's own English title and stands in for it.
+
+Participants
 trace a path across 36 human states on a tablet, and a public projection aggregates
 every path into a shared civic map, narrating what it finds in short bulletins as
 the night goes on.

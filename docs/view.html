@@ -11,7 +11,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>The Mood Topography — Your constellation</title>
-<link rel="stylesheet" href="assets/style.css?v=20260818-q1">
+<link rel="stylesheet" href="assets/style.css?v=20260818-whocares">
 <style>
   html,body{overflow:auto}
   .viewer{min-height:100vh;display:flex;flex-direction:column;padding:22px;gap:14px;max-width:640px;margin:0 auto}
@@ -106,7 +106,7 @@
   <header>
     <div class="head-l">
       <h1 id="title">Your constellation</h1>
-      <div class="eyebrow">Teder · Tel Aviv</div>
+      <div class="eyebrow">Who Cares · Teder, Tel Aviv</div>
     </div>
     <div class="head-actions" id="headActions">
       <button class="head-btn" id="themeBtn" type="button" title="Toggle light / dark" aria-label="Toggle theme"></button>
@@ -140,8 +140,8 @@
   <div class="stops" id="stops"></div>
   <p class="hint" id="hint"><b>Long-press the image to save it.</b></p>
   <div class="credits">
-    <div class="row"><b>The Mood Topography</b><span>Democracy Week · Tel Aviv · 2026</span></div>
-    <div class="row"><span>Cast at Teder</span><span id="castDate"></span></div>
+    <div class="row"><b>The Mood Topography</b><span>Who Cares · Manifest Festival</span></div>
+    <div class="row"><span>Teder · Beit Romano, Tel Aviv</span><span id="castDate"></span></div>
     <a class="row row-link" href="https://www.instagram.com/unapaulogetic_" target="_blank" rel="noopener">
       <span>Made by <b>@unapaulogetic_</b></span>
       <span>instagram.com/unapaulogetic_ →</span>
@@ -149,21 +149,22 @@
   </div>
   <!-- Print-only credits. The screen block above puts two spans on each row
        (label left, value right) which collapses into run-together text on a
-       66mm receipt — "The Mood TopographyDemocracy Week". This mirrors the
+       66mm receipt — "The Mood TopographyWho Cares". This mirrors the
        kiosk receipt exactly: one centred line per row, no Instagram URL. -->
   <div class="print-credits credits" aria-hidden="true">
     <div class="row"><b>The Mood Topography</b></div>
-    <div class="row">Democracy Week · Tel Aviv · 2026</div>
-    <div class="row">Cast at Teder · <span id="printDate"></span></div>
+    <div class="row">Who Cares · Manifest Festival</div>
+    <div class="row">Teder · Beit Romano, Tel Aviv</div>
+    <div class="row">Cast <span id="printDate"></span></div>
     <div class="row">Made by <b>@unapaulogetic_</b></div>
   </div>
 </div>
 
-<script src="assets/icons.js?v=20260818-q1"></script>
-<script src="assets/remote-config.js?v=20260818-q1"></script>
-<script src="assets/store.js?v=20260818-q1"></script>
-<script src="assets/core.js?v=20260818-q1"></script>
-<script src="assets/qrcode.min.js?v=20260818-q1"></script>
+<script src="assets/icons.js?v=20260818-whocares"></script>
+<script src="assets/remote-config.js?v=20260818-whocares"></script>
+<script src="assets/store.js?v=20260818-whocares"></script>
+<script src="assets/core.js?v=20260818-whocares"></script>
+<script src="assets/qrcode.min.js?v=20260818-whocares"></script>
 <script>
 "use strict";
 const wrap=document.getElementById("wrap");
@@ -231,6 +232,10 @@ if(!ids.length){
     : "";
   dateEl.textContent = stamp;
   printDateEl.textContent = stamp;
+  // A path code carries no timestamp, so a link shared without one would print
+  // the word "Cast" on its own line. Drop the row instead. (.row is a flex
+  // container, so [hidden] would lose to it — set display directly.)
+  printDateEl.parentElement.style.display = stamp ? "" : "none";
 
   // Draw into the (hidden) canvas, then export to a PNG data URL and hand it to
   // the visible <img>. Mobile browsers offer "Save Image" on <img> long-press

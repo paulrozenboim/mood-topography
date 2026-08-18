@@ -21,8 +21,8 @@
 const RTDB = "https://topography-of-us-default-rtdb.europe-west1.firebasedatabase.app";
 const EVENT_DEFAULTS = {
   title: "The Mood Topography",
-  occasion: "Democracy Month Art Lab",
-  venue: "Teder",
+  occasion: "Who Cares · Manifest Festival at Teder",
+  venue: "Beit Romano",
   city: "Tel Aviv"
 };
 const PAGE_SIZE = 48;
