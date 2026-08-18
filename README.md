@@ -85,8 +85,10 @@ bulletins.
 **The map afterwards** — a public page anyone can open, on a phone, from the QR on their
 receipt. Their own route is picked out of the collective one; clearing the search leaves
 them in everyone else's. It is searchable by station, by route, by the part a station
-played in a journey, and it carries a 3D view where each station's height is how many
-people passed through it.
+played in a journey, and every figure in it is a way in: tap a stretch of road on the
+charts to meet the people who walked it, or open your own journey and click the roads you
+share. It carries a 3D view where each station's height is how many people passed
+through it.
 
 ## The receipt
 

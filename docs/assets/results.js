@@ -644,6 +644,25 @@ function renderMapCue() {
     : `Filtered to <b>${esc(NODES[S.station].n)}</b> — tap it again, or anywhere else on the map, to clear.`;
 }
 
+/* Open the journeys that walked a given stretch, from wherever it was clicked.
+   Sets the route query in "run" order so the result count matches the number on
+   the row that was pressed — the charts fold direction and this has to as well. */
+function showRun(ids, opts = {}) {
+  S.station = null;                 // a map selection would fight the route query
+  S.q = ids.map(i => NODES[i].n).join(" › ");
+  S.order = "run";
+  S.pos = "any";
+  S.shown = PAGE_SIZE;
+  $("search").value = S.q;
+  renderMapCue();
+  drawAggregate();
+  renderMapReadout();
+  renderBrowser();
+  renderCharts();
+  syncURL();
+  if (opts.scroll !== false) $("browser").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function selectStation(id, announce) {
   S.station = id;
   renderMapCue();
@@ -680,13 +699,20 @@ function renderMapReadout() {
 /* Three-station runs, counted the way core.js counts two-station segments: a
    run and its reverse are the same stretch of map walked in the other
    direction, so they fold together under one key. */
-let _tripleCache = { v: -1, r: null };
-function triples(paths) {
-  if (_tripleCache.v === Store.version && _tripleCache.r) return _tripleCache.r;
+let _runCache = { v: -1, byN: {} };
+/* Every stretch of `n` stations walked back to back, direction-folded — walking
+   a road the other way is still the same road. Cached per length, because the
+   charts now ask for 2 through 10 on every render.
+
+   These counts are what the clickable rows promise, so the search a row opens
+   has to fold direction the same way — see the "run" mode in routeMatches(). */
+function runs(paths, n) {
+  if (_runCache.v !== Store.version) _runCache = { v: Store.version, byN: {} };
+  if (_runCache.byN[n]) return _runCache.byN[n];
   const m = new Map();
   for (const p of paths) {
-    for (let i = 0; i + 2 < p.nodes.length; i++) {
-      const run = [p.nodes[i], p.nodes[i + 1], p.nodes[i + 2]];
+    for (let i = 0; i + n <= p.nodes.length; i++) {
+      const run = p.nodes.slice(i, i + n);
       const fwd = run.join(">"), rev = run.slice().reverse().join(">");
       const key = fwd <= rev ? fwd : rev;
       const hit = m.get(key);
@@ -695,7 +721,7 @@ function triples(paths) {
     }
   }
   const r = [...m.values()].sort((a, b) => b.v - a.v || a.ids[0] - b.ids[0]);
-  _tripleCache = { v: Store.version, r };
+  _runCache.byN[n] = r;
   return r;
 }
 
@@ -947,44 +973,45 @@ function renderCharts() {
       <b>${Math.round((A.catEnd[c] || 0) / endTotal * 100)}%</b>
     </div>`).join("");
 
-  // --- heaviest links
-  const links = A.edgeList.slice(0, 10);
-  const maxV = links.length ? links[0].v : 1;
-  $("links").innerHTML = links.length
-    // A segment belongs to two mood categories at once, so the bar runs the
-    // same colour-to-colour gradient the map draws the route in.
-    ? links.map(e => {
-      const ca = catColor(NODES[e.a].c, S.theme), cb = catColor(NODES[e.b].c, S.theme);
-      return `<div class="rs-row static">
-        <span class="rs-rname">
-          <i style="background:${ca}"></i>${esc(NODES[e.a].n)}
-          <em>&mdash;</em>${esc(NODES[e.b].n)}
-        </span>
-        <span class="rs-rbar"><i style="width:${(e.v / maxV * 100).toFixed(1)}%;background:linear-gradient(90deg,${ca},${cb})"></i></span>
-        <span class="rs-rval">${e.v}</span>
-      </div>`;
-    }).join("")
-    : `<p class="rs-note">No segment was walked more than once.</p>`;
+  /* --- shared stretches, 2 stations up to 10 -------------------------------
+     One generated block per run length. A block is only rendered when some
+     stretch of that length was walked by more than one person — which is why
+     the long ones simply are not there most of the night, and why the page
+     grows a new heading the first time four people in a row line up.
 
-  // --- most-walked runs of three
-  const runs = triples(S.paths).filter(t => t.v > 1).slice(0, 8);
-  const maxR = runs.length ? runs[0].v : 1;
-  $("triples").innerHTML = runs.length
-    ? runs.map(t => {
-      const cols = t.ids.map(i => catColor(NODES[i].c, S.theme));
-      // Joined with real spaces around the separator: without whitespace the
-      // three names are one unbreakable token, and a narrow column then splits
-      // it mid-name ("ADAPTAT / ION") instead of wrapping between stations.
-      const names = t.ids.map((i, k) =>
+     Every row is a button. The counts are direction-folded, so the search a row
+     opens is too ("run" order): otherwise a row saying 6 would open a list of 4
+     and the page would be caught lying about its own chart. */
+  const runBlocks = [];
+  for (let n = 2; n <= MAX_STOPS; n++) {
+    const shared = runs(S.paths, n).filter(r => r.v > 1).slice(0, 10);
+    if (!shared.length) continue;
+    const maxV = shared[0].v;
+    const rows = shared.map(r => {
+      const cols = r.ids.map(i => catColor(NODES[i].c, S.theme));
+      // Real spaces around the separator: without whitespace the names form one
+      // unbreakable token and a narrow column splits it mid-name.
+      const names = r.ids.map((i, k) =>
         `<b style="color:${cols[k]}">${esc(NODES[i].n)}</b>`).join(' <em>&rsaquo;</em> ');
-      return `<div class="rs-triple">
+      const grad = cols.length > 1 ? `linear-gradient(90deg,${cols.join(",")})` : cols[0];
+      return `<button class="rs-triple rs-runrow" data-run="${r.ids.join(",")}"
+          title="Show the ${r.v} journeys that walked this">
         <span class="rs-trun">${names}</span>
-        <span class="rs-rbar"><i style="width:${(t.v / maxR * 100).toFixed(1)}%;background:linear-gradient(90deg,${cols[0]},${cols[1]},${cols[2]})"></i></span>
-        <span class="rs-rval">${t.v}</span>
-      </div>`;
-    }).join("")
-    : `<p class="rs-note">No three stations in a row were walked together more than once.</p>`;
-  $("triplesCount").textContent = runs.length ? `top ${runs.length}` : "none repeated";
+        <span class="rs-rbar"><i style="width:${(r.v / maxV * 100).toFixed(1)}%;background:${grad}"></i></span>
+        <span class="rs-rval">${r.v}</span>
+      </button>`;
+    }).join("");
+    const title = n === 2 ? "Most-walked segments" : `Shared runs of ${n}`;
+    const sub = n === 2 ? "two in a row" : `${n} stations back to back`;
+    runBlocks.push(`<div class="rs-block">
+      <h3>${title} <small>${sub} · ${shared.length === 1 ? "1 shared" : "top " + shared.length}</small></h3>
+      <div class="rs-runs">${rows}</div>
+    </div>`);
+  }
+  $("runBlocks").innerHTML = runBlocks.length
+    ? runBlocks.join("")
+    : `<div class="rs-block"><h3>Shared stretches <small>two or more in a row</small></h3>
+       <p class="rs-note">No stretch of the map has been walked by more than one person yet.</p></div>`;
 
   // --- never used as…
   const mode = NEVER_MODES[S.neverMode] ? S.neverMode : "any";
@@ -1091,14 +1118,22 @@ function routeMatches(p, ids, order) {
   if (order === "any") {
     return ids.every(id => p.nodes.includes(id));
   }
-  // "ordered": the stations run back-to-back, in this order, somewhere in the
-  // journey — so a three-stop query still finds the ten-stop path that contains it.
-  for (let i = 0; i + ids.length <= p.nodes.length; i++) {
-    let ok = true;
-    for (let j = 0; j < ids.length; j++) if (p.nodes[i + j] !== ids[j]) { ok = false; break; }
-    if (ok) return true;
-  }
-  return false;
+  const consecutive = seq => {
+    for (let i = 0; i + seq.length <= p.nodes.length; i++) {
+      let ok = true;
+      for (let j = 0; j < seq.length; j++) if (p.nodes[i + j] !== seq[j]) { ok = false; break; }
+      if (ok) return true;
+    }
+    return false;
+  };
+  // "run": back to back, either direction. This is what the segment and run
+  // charts count — they fold direction, since walking a road the other way is
+  // still the same road — so a row clicked from them must match the same set,
+  // or the number on the row and the number of results disagree.
+  if (order === "run") return consecutive(ids) || consecutive(ids.slice().reverse());
+  // "ordered": back to back in exactly this order, so a three-stop query still
+  // finds the ten-stop path that contains it.
+  return consecutive(ids);
 }
 
 function searchIndex(p) {
@@ -1182,6 +1217,7 @@ const POS_PHRASE = {
   mid: "passing through", none: "that never reach"
 };
 const ORDER_MODES = [
+  ["run", "Back to back, either way"],
   ["ordered", "In this order"],
   ["any", "Same stations, any order"],
   ["exact", "This exact route only"]
@@ -1223,7 +1259,11 @@ function renderSearchModes(Q, routeOK) {
         ? `Journeys that are exactly ${names} and nothing else.`
         : S.order === "any"
           ? `Journeys that visit ${names} in any order.`
-          : `Journeys that go ${names} back to back, in that order.`;
+          : S.order === "run"
+            // Folded direction — this is the mode the segment and run charts
+            // open, and they count a road the same whichever way it was walked.
+            ? `Journeys that walk ${names} back to back, in either direction.`
+            : `Journeys that go ${names} back to back, in that order.`;
     }
     return;
   }
@@ -1360,8 +1400,10 @@ function openJourney(id) {
   const alsoStart = S.paths.filter(x => x !== p && x.nodes[0] === startId).length;
   const alsoEnd   = S.paths.filter(x => x !== p && x.nodes[x.nodes.length - 1] === endId).length;
 
-  // The stretch of this route that the most other people also walked.
-  let share = null;
+  /* Every segment of this route that somebody else also walked — not just the
+     busiest. Each becomes a button: "you and 4 others walked this" is only half
+     an offer until you can go and see the four. */
+  const shared = [];
   for (let i = 0; i < p.nodes.length - 1; i++) {
     const a = p.nodes[i], b = p.nodes[i + 1];
     let n = 0;
@@ -1371,8 +1413,9 @@ function openJourney(id) {
         if ((o.nodes[j] === a && o.nodes[j + 1] === b) || (o.nodes[j] === b && o.nodes[j + 1] === a)) { n++; break; }
       }
     }
-    if (n > 0 && (!share || n > share.n)) share = { a, b, n };
+    if (n > 0) shared.push({ a, b, n });
   }
+  shared.sort((x, y) => y.n - x.n);
 
   const pivot = (kind, id, n) => {
     const n2 = NODES[id];
@@ -1384,12 +1427,24 @@ function openJourney(id) {
   $("jFacts").innerHTML = [
     `${p.nodes.length} stations`,
     `${new Set(p.nodes.map(i => NODES[i].c)).size} of 4 mood categories`,
-    share ? `You and ${share.n} other${share.n === 1 ? "" : "s"} walked ${NODES[share.a].n} → ${NODES[share.b].n}`
-          : null,
     twins ? `${twins} other${twins === 1 ? "" : "s"} traced this exact route` : null
   ].filter(Boolean).map(t => `<span>${esc(t)}</span>`).join("")
     + (alsoStart ? pivot("start", startId, alsoStart) : "")
-    + (alsoEnd   ? pivot("end",   endId,   alsoEnd)   : "")
+    + (alsoEnd   ? pivot("end",   endId,   alsoEnd)   : "");
+
+  // Every stretch of this route somebody else walked, each one a way in to them.
+  $("jShared").innerHTML = shared.length
+    ? `<p class="rs-sharedlabel">Roads you share &mdash; tap to meet the others</p>` +
+      shared.map(sg => {
+        const ca = catColor(NODES[sg.a].c, S.theme), cb = catColor(NODES[sg.b].c, S.theme);
+        return `<button class="jshare" data-run="${sg.a},${sg.b}"
+            title="Show the ${sg.n} other journey${sg.n === 1 ? "" : "s"} that walked this">
+          <span class="jshare-line" style="background:linear-gradient(90deg,${ca},${cb})"></span>
+          ${esc(NODES[sg.a].n)} <em>&rsaquo;</em> ${esc(NODES[sg.b].n)}
+          <b>${sg.n}</b>
+        </button>`;
+      }).join("")
+    : `<p class="rs-note">No stretch of this route has been walked by anyone else — yet.</p>`
     // The code that was on the receipt, so someone can check they have the
     // right path — and read it back out to a friend. A button rather than a
     // span: selecting text inside a chip on a phone is a fight nobody wins.
@@ -1674,6 +1729,20 @@ function wire() {
     if (p) saveJourneyPNG(p, $("jSave"));
   };
   // Delegated: everything in this row is rebuilt every time a journey opens.
+  // Delegated on the container, since the blocks are rebuilt on every render.
+  $("runBlocks").addEventListener("click", ev => {
+    const row = ev.target.closest(".rs-runrow");
+    if (!row) return;
+    showRun(row.dataset.run.split(",").map(Number));
+  });
+
+  $("jShared").addEventListener("click", ev => {
+    const b = ev.target.closest(".jshare");
+    if (!b) return;
+    closeJourney();
+    showRun(b.dataset.run.split(",").map(Number));
+  });
+
   $("jFacts").addEventListener("click", ev => {
     const piv = ev.target.closest(".jpivot");
     if (!piv) return;

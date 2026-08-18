@@ -510,13 +510,39 @@ most other people — and "Full spectrum" is gated to the first four, because ro
 thirds of paths touch all four categories and it was firing 13 times in 36 casts to
 announce "one of 24 tonight to do so".
 
+### Shared stretches
+
+The charts used to be two fixed panels: segments (two in a row) and runs (three).
+`runs(paths, n)` now counts every stretch of length `n`, direction-folded, cached per
+length, and the numbers section builds **one block per length from 2 to 10** — rendering
+only the lengths where something was walked by more than one person. Most of the night
+that is 2 and 3; the page grows a "Shared runs of 5" heading the first time five people's
+worth of road lines up, and loses it again if the data never gets there.
+
+Every row is a button that opens the journeys that walked it.
+
+**The counts are direction-folded, so the search a row opens has to be too.** That is what
+the `run` order mode is for: back to back, either direction. Without it a row saying 6
+would open a list of 4 and the page would be caught contradicting its own chart. The mode
+is a normal member of `ORDER_MODES`, so it shows in the match chips, survives in the hash
+(`&order=run`) and restores from a shared link.
+
+Verified by planting three journeys sharing a five-station run with one of them walking it
+**backwards**: the row reports 4 and the click returns all 4, the reversed one included.
+
 ### The lightbox is a pivot, not a receipt
 
 Opening a journey used to end on "Route traced by this person alone", which is true of
-very nearly every path and therefore says nothing. It now shows the stretch this route
-shares with the most other people, and two **buttons** — *N others started at X*,
-*N others ended at Y* — that close the lightbox and re-filter the whole page onto those
-strangers, leaving a shareable hash like `#q=Hope&pos=end`.
+very nearly every path and therefore says nothing. It now carries three ways out:
+
+- two **pivot buttons** — *N others started at X*, *N others ended at Y* — that close the
+  lightbox and re-filter the page onto those strangers, leaving a hash like
+  `#q=Hope&pos=end`;
+- **every road this journey shares with somebody else**, not just the busiest one, each a
+  button opening exactly those journeys. "You and 4 others walked this" is half an offer
+  until you can go and meet the four.
+
+Both go through `showRun()`, the same entry point the chart rows use.
 
 Behind the constellation, up to eight **ghosts**: the routes of others who ended where
 this one did, drawn faintly via `opts.ghosts` in `renderConstellation`. They are

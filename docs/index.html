@@ -13,7 +13,7 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0A0B0D">
-<link rel="stylesheet" href="assets/style.css?v=20260819-clean">
+<link rel="stylesheet" href="assets/style.css?v=20260819-runs2">
 <style>
   /* This page scrolls — the rest of the app is fixed-viewport. */
   html,body{height:auto;overflow:auto;overscroll-behavior:auto}
@@ -352,6 +352,19 @@
     font-size:11px;line-height:1.8;color:var(--ink-2)}
   .rs-more{margin-top:18px;display:flex;align-items:center;justify-content:center;gap:12px}
 
+  /* Station traffic, promoted to sit under the map's figures. */
+  .rs-traffic-top{margin-top:clamp(20px,3vw,30px)}
+
+  /* Run rows are buttons now. They keep the shape of the old static rows — the
+     bar is the data — and only pick up the affordances of something you can
+     press: a pointer, a hover edge, and the count going solid. */
+  .rs-runs{display:flex;flex-direction:column}
+  button.rs-runrow{display:flex;align-items:center;gap:10px;width:100%;
+    padding:7px 4px;background:none;text-align:left;font:inherit;color:inherit}
+  button.rs-runrow:hover{background:var(--hair)}
+  button.rs-runrow:hover .rs-rval{color:var(--ink)}
+  button.rs-runrow:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+
   /* ---------- lightbox ---------- */
   .rs-veil{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.72);opacity:0;pointer-events:none;
     transition:opacity .22s var(--ease);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -400,6 +413,21 @@
   .rs-const .rs-save:hover{color:var(--ink)}
   .rs-const .rs-save .icon{width:15px;height:15px}
   .rs-const .rs-save.done{color:var(--line-c)}
+  /* The roads this journey shares with other people. Each is a way out of the
+     lightbox and into those journeys, so they read as links, not labels. */
+  .rs-shared{margin-top:14px}
+  .rs-sharedlabel{font-family:'Martian Mono',monospace;font-size:9px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+  button.jshare{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;
+    background:none;text-align:left;color:var(--ink-2);
+    font-family:'Martian Mono',monospace;font-size:9.5px;letter-spacing:.08em;
+    text-transform:uppercase}
+  button.jshare:hover{background:var(--hair);color:var(--ink)}
+  button.jshare:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+  .jshare em{font-style:normal;color:var(--ink-3);padding:0 2px}
+  .jshare-line{width:16px;height:2px;flex:none;border-radius:1px}
+  .jshare b{margin-left:auto;color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+
   .rs-stops{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;padding-bottom:18px}
   .rs-stops span{display:inline-flex;align-items:center;gap:6px;font-family:'Martian Mono',monospace;
     font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;box-shadow:inset 0 0 0 1px var(--hair)}
@@ -508,6 +536,16 @@
       <div class="rs-leg"><i style="background:var(--line-m)"></i>Momentum &amp; Vision</div>
     </div>
     <div class="rs-source" id="source"></div>
+
+    <!-- Station traffic used to live at the bottom, inside "The night in
+         numbers". It belongs with the map: it is the same information as the
+         picture above it, counted. Reading it here, straight after the map and
+         its figures, means a station's name has somewhere to land the moment
+         you have seen the shape it makes. -->
+    <div class="rs-block rs-traffic-top">
+      <h3>Station traffic <small>journeys crossing · tap to filter</small></h3>
+      <div id="traffic"></div>
+    </div>
 
     <!-- 3D promo. A static preview, deliberately not an iframe: that page runs
          its own canvas pipeline and embedding it would spin up a second animated
@@ -634,23 +672,15 @@
       </div>
     </div>
     <div class="rs-cols">
-      <div class="rs-block">
-        <h3>Station traffic <small>journeys crossing</small></h3>
-        <div id="traffic"></div>
-      </div>
+      <!-- One block per run length, built in results.js. Lengths nobody shared
+           are not rendered at all, so this column grows a new heading the first
+           time four people walk the same four stations in a row. -->
+      <div id="runBlocks"></div>
       <div>
         <div class="rs-block">
           <h3>Where journeys ended <small>by mood category</small></h3>
           <div class="rs-endsbar" id="endsBar"></div>
           <div class="rs-endslegend" id="endsLegend"></div>
-        </div>
-        <div class="rs-block">
-          <h3>Most-walked segments <small>two in a row · top 10</small></h3>
-          <div id="links"></div>
-        </div>
-        <div class="rs-block">
-          <h3>Most-walked runs <small id="triplesCount">three in a row</small></h3>
-          <div id="triples"></div>
         </div>
         <div class="rs-block">
           <h3>Never used <small id="neverCount"></small></h3>
@@ -741,6 +771,7 @@
         <button type="button" id="jSave" title="Save as image" aria-label="Save as image" class="rs-save"></button>
       </div>
       <div class="rs-facts" id="jFacts"></div>
+      <div class="rs-shared" id="jShared"></div>
       <div class="rs-stops" id="jStops"></div>
     </div>
   </div>
@@ -761,10 +792,10 @@
      transport is loaded, so the page can never write back to the show. */
   window.Store = { version: 0, paths: [], theme: "dark", filter: { type: "all" } };
 </script>
-<script src="assets/icons.js?v=20260819-clean"></script>
-<script src="assets/core.js?v=20260819-clean"></script>
-<script src="assets/qrcode.min.js?v=20260819-clean"></script>
-<script src="assets/visits.js?v=20260819-clean"></script>
-<script src="assets/results.js?v=20260819-clean"></script>
+<script src="assets/icons.js?v=20260819-runs2"></script>
+<script src="assets/core.js?v=20260819-runs2"></script>
+<script src="assets/qrcode.min.js?v=20260819-runs2"></script>
+<script src="assets/visits.js?v=20260819-runs2"></script>
+<script src="assets/results.js?v=20260819-runs2"></script>
 </body>
 </html>
