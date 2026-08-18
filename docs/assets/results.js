@@ -21,8 +21,8 @@
 const RTDB = "https://topography-of-us-default-rtdb.europe-west1.firebasedatabase.app";
 const EVENT_DEFAULTS = {
   title: "The Mood Topography",
-  occasion: "Who Cares · Manifest Festival at Teder",
-  venue: "Beit Romano",
+  occasion: "Manifest — Who Cares Festival",
+  venue: "Teder",
   city: "Tel Aviv"
 };
 const PAGE_SIZE = 48;

@@ -103,6 +103,25 @@ exactly, so a bare `hope` is both a station to search for and a valid four-stop 
 `archive.html`'s reprint button goes through `view.html`, which emits a byte-identical
 receipt.
 
+### Naming the event
+
+**Manifest** is the festival. **Who Cares** (מה זה משנה) is what the festival is called.
+**Teder** is the venue, inside **Beit Romano**, Derech Yaffo 9, Tel Aviv. In English that
+composes as *Manifest — Who Cares Festival*; in Hebrew, מניפסט ~ פסטיבל "מה זה משנה".
+Getting that order wrong reached a printed receipt once already.
+
+Keep every string that can reach paper **Latin-only.** The bundled Archivo and Martian
+Mono carry no Hebrew glyphs — verified against their cmap tables, not assumed — so the
+Hebrew name comes out as tofu on a 72mm thermal roll, with RTL to argue about on top.
+`—`, `·` and `~` are all present and safe.
+
+The name lives in four places and nowhere else:
+
+- `EVENT_DEFAULTS` in `assets/results.js` — everything the results page reads off data
+- the matching `event` block in the Freeze payload in `settings.html`
+- the print-credit rows in `tablet.html` and `view.html` — the receipt
+- the header lines on `backstage.html` and `projection.html`
+
 The receipt modal is used twice in a row for the same person — preview, then the cast state
 with the QR and code added. That second state is ~235px taller, and because the veil centres
 the modal, committing used to throw the drawing 118px up the screen. The modal now has a

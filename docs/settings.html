@@ -11,7 +11,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Mood Topography — Settings</title>
-<link rel="stylesheet" href="assets/style.css?v=20260818-whocares">
+<link rel="stylesheet" href="assets/style.css?v=20260818-manifest">
 </head>
 <body>
 <div id="app">
@@ -106,12 +106,12 @@
     </div>
   </div>
 </div>
-<script src="assets/icons.js?v=20260818-whocares"></script>
-<script src="assets/remote-config.js?v=20260818-whocares"></script>
-<script src="assets/store.js?v=20260818-whocares"></script>
-<script src="assets/core.js?v=20260818-whocares"></script>
-<script src="assets/seed.js?v=20260818-whocares"></script>
-<script src="assets/nav.js?v=20260818-whocares"></script>
+<script src="assets/icons.js?v=20260818-manifest"></script>
+<script src="assets/remote-config.js?v=20260818-manifest"></script>
+<script src="assets/store.js?v=20260818-manifest"></script>
+<script src="assets/core.js?v=20260818-manifest"></script>
+<script src="assets/seed.js?v=20260818-manifest"></script>
+<script src="assets/nav.js?v=20260818-manifest"></script>
 <script>
 "use strict";
 const el=(tag,cls,html)=>{const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e};
@@ -275,8 +275,8 @@ document.getElementById("freezeBtn").onclick = () => {
   if(!real.length && !confirm("There are no real casts in this session — freeze anyway?\nThe results page will show demo paths and say so.")) return;
   const paths = real.length ? real : Store.paths;
   const payload = {
-    event: { title:"The Mood Topography", occasion:"Who Cares · Manifest Festival at Teder",
-             venue:"Beit Romano", city:"Tel Aviv" },
+    event: { title:"The Mood Topography", occasion:"Manifest — Who Cares Festival",
+             venue:"Teder", city:"Tel Aviv" },
     exported: new Date().toISOString(),
     count: paths.length,
     stations: NODES.map(n=>({id:n.id, n:n.n, c:n.c})),

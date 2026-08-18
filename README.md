@@ -2,8 +2,9 @@
 
 **A live data-sculpture about how people got to where they are.**
 
-Made for *Who Cares*, the final exhibition of the מה זה משנה art lab, at the Manifest
-Festival at Teder — Beit Romano, Derech Yaffo 9, Tel Aviv. 19 August 2026, 18:00.
+Made for **Manifest — the Who Cares Festival** (מניפסט ~ פסטיבל "מה זה משנה"), and the
+final exhibition of the מה זה משנה art lab. Teder, Beit Romano, Derech Yaffo 9, Tel Aviv.
+19 August 2026, 18:00.
 
 ---
 
