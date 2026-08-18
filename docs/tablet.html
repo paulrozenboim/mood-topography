@@ -11,7 +11,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>The Mood Topography — Cast your path</title>
-<link rel="stylesheet" href="assets/style.css?v=20260818-sync1">
+<link rel="stylesheet" href="assets/style.css?v=20260818-q1">
 <style>
   .kiosk-head{position:relative}
   .undo-row{display:flex;gap:8px;margin-top:9px}
@@ -36,12 +36,12 @@
   <div class="kiosk">
     <div class="kiosk-head">
       <div class="prompt-slot">
-        <h2 class="prompt" id="promptAnchor">Where are you right now?</h2>
-        <h2 class="prompt" id="promptDraw">Now trace where you're heading.</h2>
+        <h2 class="prompt" id="promptAnchor">What path brought you to now?</h2>
+        <h2 class="prompt" id="promptDraw">Now trace the ground you crossed.</h2>
       </div>
       <div class="instructions-slot">
-        <div class="instructions" id="instrAnchor">Tap a station below to anchor your journey. There's no timer — take the time you need to find it.</div>
-        <div class="instructions" id="instrDraw">Drag through <b>3 to 10</b> more stations, in the order you'd travel them. Drag back over a station you've already placed to erase back to that point.</div>
+        <div class="instructions" id="instrAnchor">Tap a station below to <b>anchor</b> where this chapter began. There's no timer — take the time you need to find it.</div>
+        <div class="instructions" id="instrDraw">Tap through <b>3 to 10</b> more stations, ending exactly where you are <b>today</b>. Drag back over a station you've already placed to erase.</div>
       </div>
       <div class="progress-track" id="track"></div>
       <div class="undo-row">
@@ -98,12 +98,12 @@
   </div>
 </div>
 
-<script src="assets/icons.js?v=20260818-sync1"></script>
-<script src="assets/remote-config.js?v=20260818-sync1"></script>
-<script src="assets/store.js?v=20260818-sync1"></script>
-<script src="assets/core.js?v=20260818-sync1"></script>
-<script src="assets/qrcode.min.js?v=20260818-sync1"></script>
-<script src="assets/syncpill.js?v=20260818-sync1"></script>
+<script src="assets/icons.js?v=20260818-q1"></script>
+<script src="assets/remote-config.js?v=20260818-q1"></script>
+<script src="assets/store.js?v=20260818-q1"></script>
+<script src="assets/core.js?v=20260818-q1"></script>
+<script src="assets/qrcode.min.js?v=20260818-q1"></script>
+<script src="assets/syncpill.js?v=20260818-q1"></script>
 <script>
 "use strict";
 const el=(tag,cls,html)=>{const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e};
@@ -150,24 +150,6 @@ syncFullBtn();
 
 let phase="anchor"; // anchor | draw
 
-// Rotating opening prompts — same intention (locate yourself right now),
-// different framings so a returning participant doesn't see the identical
-// question twice in a row. Rotated on load and after every cast.
-const OPENING_PROMPTS = [
-  "Where are you right now?",
-  "What state are you in tonight?",
-  "Where does this moment find you?",
-  "What's your ground tonight?",
-  "Which of these feels most like now?",
-  "Where do you stand tonight?"
-];
-let promptIdx = Math.floor(Math.random() * OPENING_PROMPTS.length);
-function nextOpeningPrompt(){
-  promptIdx = (promptIdx + 1) % OPENING_PROMPTS.length;
-  promptAnchor.textContent = OPENING_PROMPTS[promptIdx];
-}
-promptAnchor.textContent = OPENING_PROMPTS[promptIdx];
-
 function say(msg){ toast.textContent=msg; toast.classList.add("on"); clearTimeout(say._t); say._t=setTimeout(()=>toast.classList.remove("on"),1500) }
 
 function buildTrack(){
@@ -178,7 +160,10 @@ function buildTrack(){
   }
 }
 buildTrack();
-instrDraw.innerHTML=`Drag through <b>${MIN_STOPS} to ${MAX_STOPS}</b> more stations, in the order you'd travel them. Drag back over a station you've already placed to erase back to that point.`;
+// Rewritten from the constants so the numbers can never drift from MIN/MAX_STOPS.
+// Keep this wording identical to the markup above — it replaces it at load, and
+// an edit made only in the HTML never reaches the screen.
+instrDraw.innerHTML=`Tap through <b>${MIN_STOPS} to ${MAX_STOPS}</b> more stations, ending exactly where you are <b>today</b>. Drag back over a station you've already placed to erase.`;
 
 function render(){
   const ns=view.draft.nodes;
@@ -206,7 +191,7 @@ function undo(){
   else ns.pop();
   render();
 }
-function reset(){ phase="anchor"; view.draft={nodes:[],pointer:null}; nextOpeningPrompt(); render() }
+function reset(){ phase="anchor"; view.draft={nodes:[],pointer:null}; render() }
 undoBtn.onclick=undo;
 redoBtn.onclick=reset;
 
@@ -373,7 +358,7 @@ if(printAddressLooksStale()) document.getElementById("staleWarn").hidden = false
 
 // Loud here: a held cast means a receipt went out for a journey the wall
 // will never show.
-initSyncPill({mount:document.querySelector(".kiosk-corner"), loud:true});
+initSyncPill({corner:"tl", loud:true});
 
 const unsub=Store.sub(()=>{ document.documentElement.dataset.theme=Store.theme; view.dirty=true; render() });
 render();

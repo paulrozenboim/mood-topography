@@ -693,7 +693,7 @@ function triples(paths) {
 const NEVER_MODES = {
   any: { label: "Never visited at all", empty: "Every station was reached at least once.", of: A => NODES.filter(n => !A.traffic[n.id]) },
   first: { label: "Never a starting point", empty: "Every station started a journey at least once.", of: A => NODES.filter(n => !A.anchors[n.id]) },
-  last: { label: "Never a destination", empty: "Every station ended a journey at least once.", of: A => NODES.filter(n => !A.ends[n.id]) },
+  last: { label: "Never an end point", empty: "Every station ended a journey at least once.", of: A => NODES.filter(n => !A.ends[n.id]) },
   mid: {
     label: "Never a connection", empty: "Every station was passed through at least once.",
     of: A => NODES.filter(n => (A.traffic[n.id] || 0) - (A.anchors[n.id] || 0) - (A.ends[n.id] || 0) <= 0)
@@ -1156,13 +1156,13 @@ function applyFilters() {
 const POS_MODES = [
   ["any", "Anywhere on the path"],
   ["start", "As a starting point"],
-  ["end", "As a destination"],
+  ["end", "As an end point"],
   ["mid", "As a connection"],
   ["none", "Not used"]
 ];
 /* Phrasing for the toast and the map read-out, so a filtered count never
    describes itself as "journeys through X" when X was excluded. */
-const POS_LABEL = { any:"anywhere", start:"as a starting point", end:"as a destination",
+const POS_LABEL = { any:"anywhere", start:"as a starting point", end:"as an end point",
                     mid:"as a connection", none:"not used" };
 const POS_PHRASE = {
   any: "through", start: "starting at", end: "ending at",

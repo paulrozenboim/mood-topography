@@ -501,6 +501,16 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
    wall will never show, so this one is meant to be noticed from across a room. */
 .sync-pill.loud{background:var(--line-f);color:#fff;box-shadow:none}
 .sync-pill.loud i{background:#fff}
+/* Under ~560px the kiosk's centred question runs the full width and there is
+   no corner left to stand in. Shrink to the dot alone — the colour still says
+   everything — but let it speak again the moment it has something wrong to
+   report, because at that point being legible beats being tidy. */
+@media (max-width:560px){
+  .sync-pill.tl .sync-pill-text{display:none}
+  .sync-pill.tl{padding:6px}
+  .sync-pill.tl.loud{padding:6px 10px}
+  .sync-pill.tl.loud .sync-pill-text{display:inline}
+}
 @keyframes sync-blink{0%,100%{opacity:1}50%{opacity:.25}}
 
 /* ---------- misc ---------- */

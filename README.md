@@ -16,8 +16,21 @@ All under `docs/`:
   tile linking straight to Settings. Renaming it is the fix.
 - `results.html` — a redirect to `./` that keeps its hash. Receipts printed before the
   move point at `results.html#q=MT-…`; **do not delete it.**
-- `tablet.html` — the **Cast Path** kiosk. Anchor a station, drag through 3–10 more,
-  ends with a receipt modal (constellation + QR to `view.html`).
+- `tablet.html` — the **Cast Path** kiosk. **One question: "What path brought you to
+  now?"** Anchor the station where this chapter began, then tap or drag through 3–10 more,
+  ending exactly where you stand today. Ends with a receipt modal (constellation + QR).
+
+  The direction matters and everything downstream assumes it: **the first station is the
+  past and the last one is the present.** An earlier version asked where you are now and
+  where you are heading, which pointed the data the other way and made "destination"
+  mean something still ahead. If the question is ever reworded again, the copy that
+  describes it lives in three places — the kiosk prompt and both instruction lines, the
+  results page's "How it worked", and the position filter labels in `results.js`.
+
+  The draw-phase instruction is **written twice** — once in the markup and once in
+  `instrDraw.innerHTML` near the top of the script, which rebuilds it from `MIN_STOPS`
+  and `MAX_STOPS` so the numbers can't drift. The JS runs at load and wins, so an edit
+  made only in the HTML never reaches the screen. Change both.
 - `projection.html` — the public wall. Live aggregate map, per-bulletin animations,
   auto-pilot cycling.
 - `landscape.html` — 3D terrain view, **also public**: linked from the results page and
@@ -134,7 +147,7 @@ explains the process last:
 5. **The night in numbers** — the charts: all 36 stations by traffic (no inner
    scroller — the list stands full-length), the most-walked two-station segments and
    three-station runs, and a **Never used** panel whose dropdown switches between the
-   roles a station was never cast in (visited at all / a starting point / a destination /
+   roles a station was never cast in (visited at all / a starting point / an end point /
    a connection). By the end of a busy night "never visited" is usually empty, which is
    why the other three exist.
 6. **How it worked** — the field, the interaction, the collective map. This is where the
@@ -219,7 +232,7 @@ The search box takes three shapes, decided by what's typed — no mode to set fi
 
 - **A station** (`hope`, `vuln`) — partial names resolve as long as they're
   unambiguous. A dropdown then asks what part it played: anywhere on the path, as a
-  starting point, as a destination, as a connection, or **not used** — journeys that
+  starting point, as an end point, as a connection, or **not used** — journeys that
   never reached it, which is the one reading you cannot get to by searching. The same
   dropdown appears for a station picked off the map or the traffic list, so the role
   filter works whichever way the station was chosen.
