@@ -11,7 +11,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>The Mood Topography — Live wall</title>
-<link rel="stylesheet" href="assets/style.css?v=20260818-touch5">
+<link rel="stylesheet" href="assets/style.css?v=20260818-sync1">
 </head>
 <body>
 <div id="app">
@@ -26,13 +26,15 @@
   <div class="bulletin-bar">
     <div class="bar"><span class="tag" id="tag">Service notice</span><h1 class="line" id="line"></h1></div>
     <div class="sub" id="sub"></div>
+    <div class="cast-loader" id="castLoader" hidden><span></span></div>
   </div>
 </div>
-<script src="assets/icons.js?v=20260818-touch5"></script>
-<script src="assets/remote-config.js?v=20260818-touch5"></script>
-<script src="assets/store.js?v=20260818-touch5"></script>
-<script src="assets/core.js?v=20260818-touch5"></script>
-<script src="assets/nav.js?v=20260818-touch5"></script>
+<script src="assets/icons.js?v=20260818-sync1"></script>
+<script src="assets/remote-config.js?v=20260818-sync1"></script>
+<script src="assets/store.js?v=20260818-sync1"></script>
+<script src="assets/core.js?v=20260818-sync1"></script>
+<script src="assets/nav.js?v=20260818-sync1"></script>
+<script src="assets/syncpill.js?v=20260818-sync1"></script>
 <script>
 "use strict";
 const el=(tag,cls,html)=>{const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e};
@@ -66,6 +68,7 @@ const stats=document.getElementById("stats");
 // Bulletin transport state — governs the auto-rotation loop below.
 let paused = false, bulletinHidden = false;
 
+initSyncPill({mount:document.querySelector(".proj-head")});
 initQuickNav({current:"projection", actions:[
   {html: Icons.fit,        title:"Fit view",          onClick:()=>view.resetView()},
   {html: Icons.prev,       title:"Previous bulletin", onClick:()=>prevBulletin()},
@@ -219,20 +222,109 @@ requestAnimationFrame(tick);
 // available in Settings for manual VJ use, just not in the auto cycle.
 const AUTO=[{type:"all"},{type:"recent"},{type:"heaviest"},{type:"cat",c:"F"},{type:"all"},{type:"cat",c:"M"}];
 let ai=0;
-setInterval(()=>{ if(!Store.auto) return; ai=(ai+1)%AUTO.length; Store.setFilter(AUTO[ai]) },14000);
+/* Auto-pilot drives THIS screen and stays off the wire.
+   It used to broadcast, which meant one durable message every 14 seconds —
+   257 an hour, and 82% of a night's log turned out to be view changes rather
+   than anything that happened. That flooded the replay window every other
+   client hydrates from. A manual choice in Settings still broadcasts and still
+   locks the wall; only the cycling is local now. (The trade: while auto-pilot
+   is running, Settings no longer highlights which view is currently up.)
+
+   It also holds off entirely while a cast is playing. Rotating to "heaviest"
+   fifteen seconds after someone cast would drop their brand-new path straight
+   back off the map — which is exactly what it looked like when a path
+   "didn't show". */
+let castHoldUntil = 0;
+setInterval(()=>{
+  if(!Store.auto) return;
+  if(performance.now() < castHoldUntil) return;
+  ai=(ai+1)%AUTO.length;
+  Store.setFilter(AUTO[ai], {broadcast:false});
+},14000);
 
 Store.sub(evt=>{
   document.documentElement.dataset.theme=Store.theme;
   view.dirty=true;
   if(evt.type==="path" && evt.animate){
-    // Cast choreography — three staged beats, no two animations fighting:
-    //   0.0 s  celebration bulletin (no focus, no motion overlay)
-    //   0.0 s  injection animation starts (own overlay, ~3.8 s)
-    //   4.5 s  insight bulletin (with its own focus + motion)
-    // lastSwap is pushed into the future to freeze the auto-pilot queue for
-    // the whole ~10 s window so viewers can actually read what the wall says.
-    const anchor = NODES[evt.path.nodes[0]];
-    const dest   = NODES[evt.path.nodes[evt.path.nodes.length-1]];
+    castChoreography(evt.path);
+  }
+  if(evt.type==="reset"){ qi=0; lastSwap=-1e9 }
+  if(evt.type==="remove"){ view.dirty=true; lastSwap=-1e9 }
+});
+
+/* ============================================================
+   CAST CHOREOGRAPHY
+
+   Four beats. The first one is the whole point of the rewrite: someone hands
+   the tablet back, and the walk from the kiosk to where they can see the wall
+   takes a few seconds. The drawing used to start immediately, so by the time
+   they looked up their path was already sitting there among four hundred
+   others, indistinguishable. Now the wall announces it first and counts down
+   in the open, and the drawing waits for them.
+
+     0.0 s   NEW PATH DETECTED, loader bar starts filling, status lines cycle
+     6.0 s   the path draws itself across the map
+    10.5 s   what the map makes of it
+    ~12  s   auto-pilot resumes
+   ============================================================ */
+const CAST_ANNOUNCE_MS = 6000;
+const castLoader = document.getElementById("castLoader");
+let castTimers = [], castSubIv = null;
+
+function castChoreography(path){
+  // A second cast landing mid-sequence takes over rather than layering on top
+  // of the first — two people casting twenty seconds apart is normal, and two
+  // overlapping countdowns would be nonsense.
+  castTimers.forEach(clearTimeout); castTimers = [];
+  clearInterval(castSubIv);
+
+  const anchor = NODES[path.nodes[0]];
+  const dest   = NODES[path.nodes[path.nodes.length - 1]];
+  const others = Math.max(0, activePaths().length - 1);
+
+  // Hold the wall for the whole sequence: no bulletin rotation, no filter
+  // rotation, and — while auto-pilot is in charge — the full map, so the new
+  // route is seen joining the others rather than arriving into an empty frame.
+  const total = CAST_ANNOUNCE_MS + 6000;
+  castHoldUntil = performance.now() + total;
+  lastSwap      = performance.now() + total;
+  if(Store.auto) Store.setFilter({type:"all"}, {broadcast:false});
+
+  // --- beat 1: announce
+  paint({
+    tag: "✦ Incoming",
+    accent: anchor.c,
+    line: "New path detected",
+    sub: "",
+    focus: null,
+    celebrate: true
+  });
+  castLoader.hidden = false;
+  castLoader.classList.remove("run");
+  void castLoader.offsetWidth;                       // restart the fill animation
+  castLoader.style.setProperty("--castdur", CAST_ANNOUNCE_MS + "ms");
+  castLoader.classList.add("run");
+
+  const steps = [
+    `Receiving from the kiosk`,
+    `Reading <b>${path.nodes.length}</b> stations`,
+    others ? `Finding its place among <b>${others}</b> journeys`
+           : `The first journey of the night`,
+    `Drawing it now`
+  ];
+  let si = 0;
+  sub.innerHTML = steps[0];
+  castSubIv = setInterval(()=>{
+    si++;
+    if(si >= steps.length){ clearInterval(castSubIv); castSubIv = null; return }
+    sub.innerHTML = steps[si];
+  }, CAST_ANNOUNCE_MS / steps.length);
+
+  // --- beat 2: draw it
+  castTimers.push(setTimeout(()=>{
+    clearInterval(castSubIv); castSubIv = null;
+    castLoader.classList.remove("run");
+    castLoader.hidden = true;
     paint({
       tag: "✦ New cast",
       accent: anchor.c,
@@ -241,18 +333,15 @@ Store.sub(evt=>{
       focus: null,
       celebrate: true
     });
-    view.playInjection(evt.path);
-    lastSwap = performance.now() + 4000;    // block auto-rotation while injection plays
-    setTimeout(()=>{
-      const insight = castBulletin(evt.path, activePaths());
-      paint(insight);
-      // ~7 s of visible insight before auto-pilot resumes
-      lastSwap = performance.now() + 1500;
-    }, 4500);
-  }
-  if(evt.type==="reset"){ qi=0; lastSwap=-1e9 }
-  if(evt.type==="remove"){ view.dirty=true; lastSwap=-1e9 }
-});
+    view.playInjection(path);
+  }, CAST_ANNOUNCE_MS));
+
+  // --- beat 3: what it means
+  castTimers.push(setTimeout(()=>{
+    paint(castBulletin(path, activePaths()));
+    lastSwap = performance.now() + 1500;             // ~7 s of insight, then rotate
+  }, CAST_ANNOUNCE_MS + 4500));
+}
 
 document.addEventListener("keydown",e=>{
   if(e.key==="t")Store.setTheme("projection",Store.theme==="dark"?"light":"dark");

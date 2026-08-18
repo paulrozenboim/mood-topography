@@ -110,7 +110,14 @@
       subscribe(fn){
         // limitToLast caps hydration so a client joining after a very busy
         // night isn't held hostage by replay. Store.addPath dedupes by id.
-        ref.limitToLast(500).on("child_added", snap => {
+        // Was 500, which sounded generous until you count what is in the log:
+        // auto-pilot used to write a filter message every 14 seconds, so 82% of
+        // a night's messages were view changes and the window held under two
+        // hours of history. A laptop opened late to freeze the results would
+        // have replayed no paths from the first half of the event and written
+        // an incomplete snapshot. The filter spam is gone now (see
+        // projection.html); this is the belt to that pair of braces.
+        ref.limitToLast(5000).on("child_added", snap => {
           const v = snap.val(); if(!v) return;
           // Historical replays: no injection animation on the projection.
           if(v.ts && v.ts < _connectTime - 2000) v._historical = true;
@@ -120,5 +127,24 @@
     };
   }
 
-  probeLocal().then(isLocal => isLocal ? initLocal() : initCloud());
+  /* Boot, and keep trying. The original code probed once: if the venue's wifi
+     hiccuped during that one second, the page spent the rest of the night on
+     BroadcastChannel — every cast landing in the kiosk's own localStorage and
+     nowhere else, with nothing on screen to say so. Now a failure schedules
+     another attempt, backing off to a 30 s heartbeat, so a drop at 21:40
+     repairs itself without anyone having to notice. */
+  let attempt = 0;
+  function boot(){
+    attempt++;
+    Promise.resolve()
+      .then(probeLocal)
+      .then(isLocal => isLocal ? initLocal() : initCloud())
+      .then(()=>{
+        if(window.TOPO_REMOTE) return;              // connected — stop retrying
+        const wait = Math.min(30000, 2000 * Math.pow(1.6, Math.min(attempt, 8)));
+        setTimeout(boot, wait);
+      })
+      .catch(()=>setTimeout(boot, 5000));
+  }
+  boot();
 })();

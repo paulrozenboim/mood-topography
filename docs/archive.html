@@ -11,7 +11,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Mood Topography — Archive</title>
-<link rel="stylesheet" href="assets/style.css?v=20260818-touch5">
+<link rel="stylesheet" href="assets/style.css?v=20260818-sync1">
 <style>
   html,body{overflow:auto}
   .archive{max-width:1280px;margin:0 auto;padding:var(--pad)}
@@ -136,11 +136,12 @@
   <div class="grid" id="grid"></div>
 </div>
 
-<script src="assets/icons.js?v=20260818-touch5"></script>
-<script src="assets/remote-config.js?v=20260818-touch5"></script>
-<script src="assets/store.js?v=20260818-touch5"></script>
-<script src="assets/core.js?v=20260818-touch5"></script>
-<script src="assets/nav.js?v=20260818-touch5"></script>
+<script src="assets/icons.js?v=20260818-sync1"></script>
+<script src="assets/remote-config.js?v=20260818-sync1"></script>
+<script src="assets/store.js?v=20260818-sync1"></script>
+<script src="assets/core.js?v=20260818-sync1"></script>
+<script src="assets/nav.js?v=20260818-sync1"></script>
+<script src="assets/syncpill.js?v=20260818-sync1"></script>
 <script>
 "use strict";
 const archiveEl = document.getElementById("archive");
@@ -161,6 +162,7 @@ let selectMode = false;
 const selectedIds = new Set();
 
 initQuickNav({current:"archive"});
+initSyncPill({corner:"br"});
 
 // Theme is the unified Store.theme — flipping it here also flips Cast Path,
 // Projection and Settings on any device that's on the same Sync channel.

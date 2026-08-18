@@ -148,6 +148,36 @@ routes, the way traffic moves on a transit diagram. Tapping a station filters th
 grid and says so in a small notice — it never drags the page there by itself; going is a
 button in the notice.
 
+### When a path is cast
+
+Four beats on the wall, and the first one exists entirely because of what it looks like
+from the floor. Someone hands the tablet back and walks to where they can see the
+projection; that takes a few seconds. The drawing used to start immediately, so by the
+time they looked up their path was already sitting there among all the others,
+indistinguishable from them.
+
+```
+ 0.0 s   NEW PATH DETECTED — a loader bar fills, status lines count it in
+ 6.0 s   the path draws itself across the map
+10.5 s   what the map makes of it
+ ~12 s   auto-pilot resumes
+```
+
+The bar is the clock: it shows how long, so the pause reads as anticipation rather than
+as the wall having stalled. The status lines underneath name the path as it arrives
+("Reading 7 stations", "Finding its place among 41 journeys"), so the wait has something
+countable in it.
+
+For the whole sequence the wall holds: no bulletin rotation, no filter rotation, and —
+while auto-pilot is in charge — the full map, so the new route is seen joining the others
+rather than arriving into a filtered frame. **That hold is also a bug fix.** Rotating to
+"heaviest links" fifteen seconds after someone cast would drop their brand-new path
+straight back off the map, which is exactly what it looked like when a path "didn't
+show".
+
+A second cast landing mid-sequence takes over rather than layering on top — two people
+casting twenty seconds apart is normal, and two overlapping countdowns would be nonsense.
+
 **The readings** run as a full-bleed strip that drifts sideways on its own. A mouse over
 it stops it for as long as the pointer stays. Any hand-scroll — drag, wheel, swipe —
 parks it for ten seconds and then it picks up again on its own, which is the only
@@ -327,6 +357,48 @@ Two modes, auto-detected at page load:
   This is what runs on the deployed GitHub Pages URL.
 
 Detection is a same-origin probe of `/health`.
+
+### Staying in sync
+
+Three things that were silently missing, all found by a path not showing up on the
+wall during a home run-through:
+
+**The connection retries.** The probe used to run once. If the venue's wifi hiccuped
+during the second the page happened to load, that page spent the rest of the night on
+BroadcastChannel — every cast landing in the kiosk's own localStorage and nowhere else.
+A failed attempt now schedules another, backing off to a 30-second heartbeat, and
+`store.js` keeps watching for a transport to appear instead of giving up after six
+seconds.
+
+**Nothing durable is dropped.** A `path` or `remove` sent while there is no transport
+goes into an outbox, persisted to localStorage, and flushes in order the moment one
+arrives — across a page reload if need be. Only those two kinds are queued: a `filter`
+or `theme` arriving twenty minutes late describes a moment that has passed, and would
+be worse than losing it. Replays are safe; `addPath`/`removePath` both no-op on an id
+they already know.
+
+**It says so on screen.** Every operator surface carries a live pill
+(`assets/syncpill.js`): a green dot for connected, an amber blinking one while
+connecting, and on the kiosk a red band naming how many casts are waiting. This is the
+whole point — the failure is otherwise completely invisible. The kiosk keeps accepting
+paths, keeps printing receipts, and looks perfectly healthy while none of it reaches
+anywhere.
+
+The pill only reports; there is no button. Reconnection and flushing happen on their own.
+
+### Auto-pilot stays off the wire
+
+The wall's view rotation is **local to the wall**. It used to broadcast, which meant one
+permanent message every 14 seconds — 257 an hour. Measured on a real log, **82% of the
+night's messages were view changes** rather than anything that happened, which flooded
+the replay window every other client hydrates from: at `limitToLast(500)` the window
+held under two hours, so a laptop opened late to freeze the results would have replayed
+no paths from the first half of the event and written an incomplete snapshot.
+
+A manual choice in Settings still broadcasts and still locks the wall. Only the cycling
+is local. The trade is that while auto-pilot is running, Settings no longer highlights
+which view is currently up — it says so on the page. The replay cap is now 5000 as a
+backstop.
 
 ## Deploying to GitHub Pages
 

@@ -20,9 +20,37 @@ const uid = ()=> Math.random().toString(36).slice(2,9);
    Everything above this line — Store, MapView, both bulletin logic — is unaware of
    which transport is active.
 --------------------------------------------------------------------------- */
+const OUTBOX_KEY = "topography-of-us:outbox";
+
 const Sync = (()=>{
   const me = uid();
   let mode = "local", remote = null, statusListeners = new Set();
+
+  /* ---- outbox -----------------------------------------------------------
+     Anything durable that is sent while there is no transport waits here and
+     goes out the moment one appears. Without it, a cast made during a wifi
+     drop existed only in this browser's localStorage: the wall never saw it,
+     the cloud log never saw it, and a frozen snapshot would never contain it.
+     ONLY `path` and `remove` are queued. A stale `clear` or `filter` arriving
+     twenty minutes late would be worse than losing it — those describe a
+     moment, not a fact. Replays are safe: addPath/removePath both no-op on an
+     id they already know. */
+  const DURABLE = new Set(["path", "remove"]);
+  let outbox = [];
+  try{
+    const raw = localStorage.getItem(OUTBOX_KEY);
+    if(raw) outbox = JSON.parse(raw) || [];
+  }catch(_){ outbox = [] }
+  function saveOutbox(){
+    try{ localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox)) }catch(_){}
+  }
+  function flushOutbox(){
+    if(!remote || !outbox.length) return;
+    const pending = outbox.slice();
+    outbox = []; saveOutbox();
+    pending.forEach(m => remote.send(m));
+    setStatus(mode);                                 // refresh the pending count
+  }
 
   let ch=null;
   try{ ch = new BroadcastChannel("topography-of-us"); }catch(e){}
@@ -33,7 +61,11 @@ const Sync = (()=>{
     };
   }
 
-  function setStatus(s){ mode=s; statusListeners.forEach(fn=>fn(mode)) }
+  function setStatus(s){
+    mode=s;
+    const info = {mode, pending: outbox.length, live: !!remote};
+    statusListeners.forEach(fn=>fn(mode, info));
+  }
 
   // remote-config.js now sets window.TOPO_REMOTE *asynchronously* — it probes for
   // the local Python server and, if that misses, dynamically loads Firebase. So
@@ -45,22 +77,34 @@ const Sync = (()=>{
     remote = window.TOPO_REMOTE;
     remote.subscribe(m=> Sync._receive(m));
     setStatus(window.TOPO_MODE || "remote");
+    flushOutbox();
     return true;
   }
   if(!tryAdoptRemote()){
-    const pollIv = setInterval(()=>{ if(tryAdoptRemote()) clearInterval(pollIv) }, 100);
-    // 6 s cap — long enough for Firebase SDK to arrive over slow LTE, short
-    // enough that a truly-offline visitor stops waiting and uses BroadcastChannel.
-    setTimeout(()=>clearInterval(pollIv), 6000);
+    // Fast polling while the page is still starting up, then a slow heartbeat
+    // that never stops. The old version gave up after six seconds and stayed
+    // on BroadcastChannel for the rest of the night; remote-config.js now keeps
+    // retrying the connection, so something has to be here to notice when it
+    // finally succeeds.
+    let fast = setInterval(()=>{ if(tryAdoptRemote()) clearInterval(fast) }, 100);
+    setTimeout(()=>{
+      clearInterval(fast);
+      if(remote) return;
+      setStatus("offline");
+      const slow = setInterval(()=>{ if(tryAdoptRemote()) clearInterval(slow) }, 2000);
+    }, 6000);
   }
 
   return {
     get mode(){ return mode },
     onStatus(fn){ statusListeners.add(fn); fn(mode); return ()=>statusListeners.delete(fn) },
+    get pending(){ return outbox.length },
     send(m){
       const withFrom={...m, from:me};
-      if(remote) remote.send(withFrom);
-      else if(ch) try{ ch.postMessage(withFrom) }catch(e){}
+      // Same-device tabs always get it, transport or not.
+      if(ch) try{ ch.postMessage(withFrom) }catch(e){}
+      if(remote){ remote.send(withFrom); return }
+      if(DURABLE.has(m.k)){ outbox.push(withFrom); saveOutbox(); setStatus(mode) }
     },
     hello(){ this.send({k:"hello"}) },
     _receive(m){
