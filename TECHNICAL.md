@@ -476,16 +476,18 @@ Only the cycling is local. The replay cap is now 5000 as a backstop.
 
 ### What the bulletins look for
 
-Five readings were removed and five added, after the first thirty-six real casts showed
-what the data actually contains. **Exact repeats essentially do not happen** — a
-seven-stop route is one of about 66 billion — so "Well-worn path" (`N of you traced the
-exact same route`) waited all night for a coincidence. Three others ("Average journey",
-"Kept it short", "Went the distance") were arithmetic about the data rather than anything
-about the room, and "Widest reach" described one path's geometry.
+Five readings were removed and five added. **Exact repeats essentially cannot happen** —
+a seven-stop route is one of about 66 billion — so "Well-worn path" (`N of you traced the
+exact same route`) was waiting all night for a coincidence. Three others ("Average
+journey", "Kept it short", "Went the distance") were arithmetic about the data rather than
+anything about the room, and "Widest reach" described one path's geometry.
 
-In their place, five that measure overlap. All five fire on the real 36-cast set:
+In their place, five that measure overlap. The table below is a **smoke test against a
+rehearsal set, not a finding about people** — every cast in the log so far was made by the
+artist while building this. It shows the five fire and produce sensible sentences on
+realistic input; what a room of strangers produces is what the night is for.
 
-| tag | what it says on that data |
+| tag | on the rehearsal set |
 |---|---|
 | **Convergence** | 11 journeys ended at Hope, by 10 different roads |
 | **Divergence** | 4 started at Frustration and ended in 4 different places |

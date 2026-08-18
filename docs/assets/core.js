@@ -234,8 +234,8 @@ function _analyse(paths){
   }
 
   // Same anchor AND same destination, by different roads. The strongest version
-  // of the whole idea, and it does occur: on 36 real casts, four people went
-  // Conflict to Hope and three of those routes were distinct.
+  // of the whole idea. It fires readily on a rehearsal set; whether a room of
+  // strangers produces it is exactly the thing the night is for.
   let sameEnds = null;
   const pairMap = new Map();
   for(const p of paths){
@@ -528,8 +528,9 @@ function bulletins(A){
     const [a,b,c] = A.sharedRun.nodes.map(i=>NODES[i]);
     // The "no two of you" clause is a claim about the data, so it is only made
     // when the data supports it. A.repeatTop is set the moment any two paths
-    // match exactly, which does happen — rarely, and usually because a route
-    // reads as a story rather than by chance.
+    // match exactly. On the arithmetic that should never happen — but the wall
+    // is not allowed to assert it on arithmetic, only on what is in front of
+    // it, so the sentence checks before it speaks.
     const allUnique = !A.repeatTop;
     out.push({tag:"Shared road", accent:b.c,
       line: allUnique

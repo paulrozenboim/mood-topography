@@ -57,18 +57,20 @@ thing from arriving at it by way of Curiosity, and that a room full of those rou
 something a room full of destinations wouldn't.
 
 **It is not a piece about everyone turning out to be the same.** A seven-stop route is
-one of about sixty-six billion, and on the first thirty-six real casts, thirty-five were
-unlike any other. Nobody walks your road. Looking for people who did was the wrong
-question, and the readings that hunted for it sat silent all night waiting for a
-coincidence.
+one of about sixty-six billion. Two people tracing the identical one would be a
+coincidence rather than a finding, and the readings that went looking for it were waiting
+all night for something that essentially cannot happen. Nobody walks your road. That is
+the baseline here, not the discovery.
 
-What the room actually produces is overlap. Eleven journeys ended at Hope by ten
-different roads. Four set out from Frustration and finished in four different places.
-Forty-seven per cent of the room crossed Vulnerability at some point, no two of them the
-same way. That is the finding, and it is a better one: **shared infrastructure, not
-shared itineraries.** You are not alone on the map, and you are not a copy of anyone on
-it either. The wall says that, and the results page lets you click your own starting
-station to meet the strangers who stood there too.
+What a room can produce is **overlap**: different routes crossing the same ground. Several
+journeys ending at the same station by entirely different roads. People setting out from
+the same place and scattering. A station most of the room passed through, no two of them
+the same way. That is what the wall now looks for, and it is a better claim — **shared
+infrastructure, not shared itineraries.** You are not alone on the map, and you are not a
+copy of anyone on it either. The results page lets you click your own starting station to
+meet the strangers who stood there too.
+
+Whether the room actually delivers it is the experiment. That is the point of running it.
 
 ## The three surfaces
 
@@ -128,7 +130,11 @@ Live at **paulrozenboim.github.io/mood-topography**.
    green **Live** dot — if one is amber or red, it is not talking to the other.
 2. **Settings → Demo paths → off** before anyone arrives.
    Set **Seconds per view** there too if 15 feels wrong for the room.
-3. **Settings → Clear demo paths** once there is something real to show.
+3. **Settings → Clear everything**, just before doors. This is the one that matters:
+   rehearsal casts made from the kiosk are stored as *real* casts, not demo ones, so
+   **"Clear demo paths only" will not remove them** — it only removes the seeded set. A
+   night that opens with your own test routes in it will report them as findings and
+   freeze them into the permanent record.
 4. Reload the kiosk if it has been open since before a deploy — a red band appears when
    it would otherwise print a dead QR code.
 5. Afterwards: **Settings → Freeze results** pins the night permanently.
