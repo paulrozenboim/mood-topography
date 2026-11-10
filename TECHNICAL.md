@@ -404,8 +404,18 @@ night sits at 7.8 ms full detail and 3.6 ms while moving.
 **Camera** — one pointer rotates (unrestricted, including straight down or from
 below). Two fingers pinch to zoom and drag to pan; with a mouse that's wheel and
 middle-drag. **Double click or double tap resets** the framing — there is no reset
-button and no `R` key, because one gesture that works identically on both devices
-needs no legend. `Space` toggles auto-rotate, `P` saves a PNG.
+button, because one gesture that works identically on both devices needs no legend.
+`Space` toggles auto-rotate, `P` saves a PNG, `R` (or the corner record button) starts
+and stops a video take.
+
+**Recording** renders the film frame by frame instead of filming the screen: each frame
+steps the world exactly 1/60 s and goes to the browser's H.264 encoder (WebCodecs) with
+its exact timestamp, muxed to MP4 by `assets/vendor/mp4-muxer.js` (MIT). A slow frame
+takes longer to make but can never stutter, so takes are smooth on any machine and may
+run slower than real time while recording; the button counts the film's own length. The
+canvas size is frozen for the take (H.264 needs even sizes, so the canvas always is).
+The current-path card is painted into each frame; the rest of the HUD is not filmed.
+Browsers without WebCodecs fall back to real-time MediaRecorder.
 
 The top-left card names what is on screen — one journey while the playlist runs, the
 whole field otherwise — and links through to that path on the results page. **Fly the

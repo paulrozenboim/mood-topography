@@ -87,6 +87,9 @@
   /* Record. Only the canvas is captured, so this HUD never ends up in the film. */
   .corner-btns .rec-btn.rec{width:auto;padding:7px 9px;color:#e5484d;box-shadow:inset 0 0 0 1px #e5484d}
   .rec-btn .rec-time{font-variant-numeric:tabular-nums}
+  /* While filming, the path card is painted into the canvas itself (so it is in
+     the video); the DOM copy is hidden so it is not drawn twice on screen. */
+  .is-recording #pathCard{visibility:hidden}
   .rec-btn.rec svg{animation:recblink 1s steps(2,start) infinite}
   @keyframes recblink{to{visibility:hidden}}
 
@@ -166,6 +169,7 @@
 <script src="assets/remote-config.js?v=20260901-frozen"></script>
 <script src="assets/store.js?v=20260901-frozen"></script>
 <script src="assets/core.js?v=20260901-frozen"></script>
+<script src="assets/vendor/mp4-muxer.js?v=5.2.2"></script>
 <script>
 "use strict";
 
@@ -269,11 +273,18 @@ let cx = 0, cy = 0;
 const WORLD_BOX = {w:1400, h:820};
 const worldCenter = {x: WORLD_BOX.w/2, y: 0, z: WORLD_BOX.h/2};
 
+// The video take in progress, if any (see Recording, below). Declared here
+// because resize() reads it and runs as soon as the page loads.
+let rec = null;
 function resize(){
+  // The film's frame size is fixed when recording starts; resizing mid-take
+  // would break the encoder, so the canvas holds still until the take ends.
+  if(rec && rec.kind === "frames") return;
   const dpr = Math.min(devicePixelRatio||1, 2);
   const r = cv.getBoundingClientRect();
-  cv.width = Math.max(1, r.width*dpr);
-  cv.height = Math.max(1, r.height*dpr);
+  // Even pixel sizes: H.264 cannot encode an odd width or height.
+  cv.width = Math.max(2, Math.floor(r.width*dpr/2)*2);
+  cv.height = Math.max(2, Math.floor(r.height*dpr/2)*2);
   ctx.setTransform(dpr,0,0,dpr,0,0);
   cx = r.width/2; cy = r.height/2;
 }
@@ -638,6 +649,13 @@ let lastTs = performance.now();
 function frame(ts){
   const dt = Math.min(0.05, (ts - lastTs)/1000);
   lastTs = ts;
+  // During a frame-by-frame take the recorder drives the clock instead.
+  if(!(rec && rec.kind === "frames")) renderTick(dt);
+  requestAnimationFrame(frame);
+}
+// Advance the world by dt seconds and paint it. Called by the display loop in
+// real time, or by the recorder at an exact 1/60 s per film frame.
+function renderTick(dt){
   if(autoRotate && !pointers.size){ yaw += dt * 0.14; dirty = true; }
   if(anim.playing){ advanceAnim(dt); dirty = true; }
   // Pings keep the frame alive until they finish, so one can still play out
@@ -653,8 +671,8 @@ function frame(ts){
   // the one already on screen, so don't spend anything drawing it.
   // While recording, paint every frame so the film has a steady frame rate
   // even when nothing moves (a still shot is still a shot).
-  if(recorder) dirty = true;
-  if(!dirty){ requestAnimationFrame(frame); return; }
+  if(rec) dirty = true;
+  if(!dirty) return;
   dirty = false;
 
   const shown = activePaths();
@@ -912,7 +930,7 @@ function frame(ts){
   }
 
   updatePathCard(shown);
-  requestAnimationFrame(frame);
+  if(rec) drawRecOverlay();
 }
 requestAnimationFrame(frame);
 
@@ -1049,64 +1067,185 @@ addEventListener("keydown", e => {
 });
 
 /* ---- Recording -----------------------------------------------------------
-   Films the canvas straight to a video file, in the browser, no upload. R or
-   the record button starts and stops; the file downloads when it stops. Only
-   the canvas is captured, so the HUD, sliders and this button stay out of it.
-   MP4 (H.264) where the browser can, which is what festivals and editors want;
-   WebM otherwise. */
-let recorder = null, recChunks = [], recStart = 0, recTimer = null;
+   R or the record button starts and stops a take; the file downloads when it
+   stops.
+
+   The film is made FRAME BY FRAME, not filmed off the screen. Each take steps
+   the world exactly 1/60 s, paints it, and hands that frame to the browser's
+   video encoder (WebCodecs) with its exact timestamp. A heavy frame just takes
+   longer to make — it can never stutter or drop — so the take is perfectly
+   smooth on any machine, and may run a little slower (or faster) than real
+   time while it is being made. The button counts the film's own length.
+
+   What is in the film: the canvas, plus the current-path card (start → end
+   station), painted into the frame. Nothing else of the HUD.
+
+   Browsers without WebCodecs (older Safari, Firefox) fall back to filming the
+   canvas in real time with MediaRecorder, which can stutter under load. */
 const REC_FPS = 60;
-const REC_TYPES = [
-  "video/mp4;codecs=avc1.640033", "video/mp4;codecs=avc1", "video/mp4",
-  "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"
-];
-function pickRecType(){
-  if(!window.MediaRecorder || !cv.captureStream) return null;
-  for(const t of REC_TYPES) if(MediaRecorder.isTypeSupported(t)) return t;
-  return "";
-}
+// `rec` (the take in progress) is declared up by resize(), which reads it.
+let recTimer = null;
+
 function recStamp(){
   const d = new Date(), z = n => String(n).padStart(2, "0");
   return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`;
 }
-function startRecording(){
-  const type = pickRecType();
-  if(type === null){ alert("This browser cannot record video. Try Chrome, Edge or Safari."); return; }
+function downloadBlob(blob, ext){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `mood-topography-3d-${recStamp()}.${ext}`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+function endTake(){
+  rec = null;
+  document.documentElement.classList.remove("is-recording");
+  resize(); invalidate(); syncRecBtn();
+}
+
+/* The path card, painted into the canvas in the same place and style as the
+   DOM card, so it is in the film. Read straight off the live DOM each frame,
+   so it always matches whatever the card says right now. */
+function drawRecOverlay(){
+  const card = document.getElementById("pathCard");
+  if(card.classList.contains("static")) return;          // "All paths": nothing to show
+  const cr = card.getBoundingClientRect();
+  if(!cr.width) return;
+  const rs = getComputedStyle(document.documentElement);
+  ctx.save();
+  ctx.fillStyle = rs.getPropertyValue("--panel").trim() || "rgba(0,0,0,.6)";
+  ctx.fillRect(cr.left, cr.top, cr.width, cr.height);
+  ctx.strokeStyle = rs.getPropertyValue("--hair").trim() || "rgba(255,255,255,.15)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cr.left + .5, cr.top + .5, cr.width - 1, cr.height - 1);
+  const th = document.getElementById("pathThumb");
+  const tr = th.getBoundingClientRect();
+  if(tr.width && th.width) ctx.drawImage(th, tr.left, tr.top, tr.width, tr.height);
+  for(const el of [document.getElementById("pathCardTitle"), document.getElementById("pathCardSub")]){
+    const er = el.getBoundingClientRect(), cs = getComputedStyle(el);
+    if(!er.width) continue;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(er.left, er.top - 2, er.width, er.height + 4); ctx.clip();
+    ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    if("letterSpacing" in ctx) ctx.letterSpacing = cs.letterSpacing === "normal" ? "0px" : cs.letterSpacing;
+    ctx.fillStyle = cs.color; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const t = cs.textTransform === "uppercase" ? el.textContent.toUpperCase() : el.textContent;
+    ctx.fillText(t, er.left, er.top + er.height / 2);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// ---- Frame-by-frame take (WebCodecs + mp4-muxer) ----
+async function pickVideoConfig(w, h){
+  if(!window.VideoEncoder || !window.VideoFrame || !window.Mp4Muxer) return null;
+  for(const codec of ["avc1.640034", "avc1.640033", "avc1.4d0034", "avc1.42003e"]){
+    const c = { codec, width:w, height:h, bitrate: 24_000_000, framerate: REC_FPS,
+                latencyMode: "quality", avc: { format: "avc" } };
+    try { if((await VideoEncoder.isConfigSupported(c)).supported) return c; } catch(_){}
+  }
+  return null;
+}
+// Yield to the browser between frames (keys, clicks, painting) without the
+// 4 ms+ clamp of setTimeout — and without the 1 s throttle of a hidden tab.
+const yieldTask = () => new Promise(r => { const ch = new MessageChannel(); ch.port1.onmessage = () => r(); ch.port2.postMessage(0); });
+
+async function startFrameTake(){
+  const w = cv.width & ~1, h = cv.height & ~1;
+  const config = await pickVideoConfig(w, h);
+  if(!config) return false;
+  const muxer = new Mp4Muxer.Muxer({
+    target: new Mp4Muxer.ArrayBufferTarget(),
+    video: { codec: "avc", width: w, height: h, frameRate: REC_FPS },
+    fastStart: "in-memory",
+  });
+  const take = { kind:"frames", n:0, stop:false, saving:false, error:null };
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    error: e => { take.error = e; },
+  });
+  encoder.configure(config);
+  rec = take;
+  document.documentElement.classList.add("is-recording");
+  syncRecBtn();
+
+  const step = 1 / REC_FPS, usPerFrame = 1e6 / REC_FPS;
+  while(!take.stop && !take.error){
+    renderTick(step);                                  // world + path card, painted
+    const f = new VideoFrame(cv, { timestamp: Math.round(take.n * usPerFrame),
+      duration: Math.round(usPerFrame), visibleRect: { x:0, y:0, width:w, height:h } });
+    encoder.encode(f, { keyFrame: take.n % (REC_FPS * 2) === 0 });
+    f.close();
+    take.n++;
+    // Don't race ahead of the encoder: a long take must not pile up in memory.
+    while(encoder.encodeQueueSize > 4 && !take.error) await new Promise(r => setTimeout(r, 2));
+    await yieldTask();
+  }
+  take.saving = true; syncRecBtn();
+  try {
+    await encoder.flush(); encoder.close(); muxer.finalize();
+    if(take.error) throw take.error;
+    downloadBlob(new Blob([muxer.target.buffer], { type: "video/mp4" }), "mp4");
+  } catch(e){
+    console.error("Recording failed", e);
+    alert("Recording failed: " + (e && e.message || e));
+  }
+  endTake();
+  return true;
+}
+
+// ---- Real-time fallback (MediaRecorder) ----
+function pickLiveType(){
+  if(!window.MediaRecorder || !cv.captureStream) return null;
+  for(const t of ["video/mp4;codecs=avc1.640033", "video/mp4;codecs=avc1", "video/mp4",
+                  "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"])
+    if(MediaRecorder.isTypeSupported(t)) return t;
+  return "";
+}
+function startLiveTake(){
+  const type = pickLiveType();
+  if(type === null){ alert("This browser cannot record video. Try Chrome or Edge."); return; }
   const stream = cv.captureStream(REC_FPS);
   const opts = { videoBitsPerSecond: 16_000_000 };
   if(type) opts.mimeType = type;
-  try { recorder = new MediaRecorder(stream, opts); }
-  catch(_){ recorder = new MediaRecorder(stream); }
-  recChunks = [];
-  recorder.ondataavailable = e => { if(e.data && e.data.size) recChunks.push(e.data); };
-  recorder.onstop = () => {
-    const mime = recorder.mimeType || type || "video/webm";
-    const ext = mime.includes("mp4") ? "mp4" : "webm";
-    const blob = new Blob(recChunks, { type: mime.split(";")[0] });
+  let mr;
+  try { mr = new MediaRecorder(stream, opts); } catch(_){ mr = new MediaRecorder(stream); }
+  const chunks = [];
+  mr.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+  mr.onstop = () => {
+    const mime = mr.mimeType || type || "video/webm";
     stream.getTracks().forEach(t => t.stop());
-    recorder = null; recChunks = [];
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `mood-topography-3d-${recStamp()}.${ext}`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    syncRecBtn();
+    downloadBlob(new Blob(chunks, { type: mime.split(";")[0] }), mime.includes("mp4") ? "mp4" : "webm");
+    endTake();
   };
-  recorder.start(1000);              // a chunk a second, so a long take never sits in one buffer
-  recStart = performance.now();
-  invalidate();
+  rec = { kind:"live", mr, start: performance.now() };
+  document.documentElement.classList.add("is-recording");
+  mr.start(1000);
+  invalidate(); syncRecBtn();
+}
+
+async function startRecording(){
+  if(rec) return;
+  rec = { kind:"starting" };                 // blocks a second R while the encoder is checked
   syncRecBtn();
+  let ok = false;
+  try { ok = await startFrameTake(); }
+  catch(e){ console.warn("Frame-by-frame recording unavailable", e); }
+  if(!ok){ rec = null; startLiveTake(); }
 }
 function stopRecording(){
-  if(recorder && recorder.state !== "inactive") recorder.stop();
+  if(!rec) return;
+  if(rec.kind === "frames") rec.stop = true;
+  else if(rec.kind === "live" && rec.mr.state !== "inactive") rec.mr.stop();
 }
-function toggleRecording(){ recorder ? stopRecording() : startRecording(); }
+function toggleRecording(){ rec ? stopRecording() : startRecording(); }
+
 const REC_ICON  = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5.5" fill="currentColor"/></svg>';
 const STOP_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" fill="currentColor"/></svg>';
 function syncRecBtn(){
   const b = document.getElementById("recBtn");
   if(!b) return;
-  const on = !!recorder;
+  const on = !!rec;
   clearInterval(recTimer); recTimer = null;
   b.classList.toggle("rec", on);
   const label = on ? "Stop recording (R)" : "Record video (R)";
@@ -1114,10 +1253,14 @@ function syncRecBtn(){
   b.setAttribute("aria-pressed", on ? "true" : "false");
   if(!on){ b.innerHTML = REC_ICON; return; }
   const paint = () => {
-    const s = Math.floor((performance.now() - recStart) / 1000);
+    if(!rec) return;
+    if(rec.saving){ b.innerHTML = STOP_ICON + `<span class="rec-time">saving…</span>`; return; }
+    // Frame takes count the FILM's length; live takes count wall time.
+    const s = rec.kind === "frames" ? Math.floor(rec.n / REC_FPS)
+            : rec.kind === "live"   ? Math.floor((performance.now() - rec.start) / 1000) : 0;
     b.innerHTML = STOP_ICON + `<span class="rec-time">${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}</span>`;
   };
-  paint(); recTimer = setInterval(paint, 500);
+  paint(); recTimer = setInterval(paint, 250);
 }
 
 /* ---- The current path -----------------------------------------------------
