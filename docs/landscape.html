@@ -84,6 +84,11 @@
   .corner-btns{position:absolute;top:var(--pad);right:var(--pad);display:flex;gap:6px;pointer-events:auto;z-index:6}
   .corner-btns .corner-btn{position:relative;top:auto;right:auto}
   .corner-btns .corner-btn.on{color:var(--ink);background:rgba(127,127,127,.18);box-shadow:inset 0 0 0 1px var(--ink-3)}
+  /* Record. Only the canvas is captured, so this HUD never ends up in the film. */
+  .corner-btns .rec-btn.rec{width:auto;padding:7px 9px;color:#e5484d;box-shadow:inset 0 0 0 1px #e5484d}
+  .rec-btn .rec-time{font-variant-numeric:tabular-nums}
+  .rec-btn.rec svg{animation:recblink 1s steps(2,start) infinite}
+  @keyframes recblink{to{visibility:hidden}}
 
   /* ---- Phone ----
      The two HUD corners are given the full width and stacked instead of facing
@@ -646,6 +651,9 @@ function frame(ts){
   }
   // Nothing moved and nothing changed — the next frame would be identical to
   // the one already on screen, so don't spend anything drawing it.
+  // While recording, paint every frame so the film has a steady frame rate
+  // even when nothing moves (a still shot is still a shot).
+  if(recorder) dirty = true;
   if(!dirty){ requestAnimationFrame(frame); return; }
   dirty = false;
 
@@ -1026,8 +1034,11 @@ function resetCamera(){
 }
 
 addEventListener("keydown", e => {
-  // R is gone: reset is a double click or double tap, which is the same gesture
-  // on both mouse and touch and needs no legend.
+  // Reset is a double click or double tap. R is now record: start / stop.
+  // Ctrl/Cmd+R stays a browser reload.
+  if((e.key === "r" || e.key === "R") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat){
+    e.preventDefault(); toggleRecording(); return;
+  }
   if(e.key === " "){ e.preventDefault(); autoRotate = !autoRotate; invalidate(); }
   if(e.key === "p" || e.key === "P"){
     const link = document.createElement("a");
@@ -1036,6 +1047,78 @@ addEventListener("keydown", e => {
     link.click();
   }
 });
+
+/* ---- Recording -----------------------------------------------------------
+   Films the canvas straight to a video file, in the browser, no upload. R or
+   the record button starts and stops; the file downloads when it stops. Only
+   the canvas is captured, so the HUD, sliders and this button stay out of it.
+   MP4 (H.264) where the browser can, which is what festivals and editors want;
+   WebM otherwise. */
+let recorder = null, recChunks = [], recStart = 0, recTimer = null;
+const REC_FPS = 60;
+const REC_TYPES = [
+  "video/mp4;codecs=avc1.640033", "video/mp4;codecs=avc1", "video/mp4",
+  "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"
+];
+function pickRecType(){
+  if(!window.MediaRecorder || !cv.captureStream) return null;
+  for(const t of REC_TYPES) if(MediaRecorder.isTypeSupported(t)) return t;
+  return "";
+}
+function recStamp(){
+  const d = new Date(), z = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`;
+}
+function startRecording(){
+  const type = pickRecType();
+  if(type === null){ alert("This browser cannot record video. Try Chrome, Edge or Safari."); return; }
+  const stream = cv.captureStream(REC_FPS);
+  const opts = { videoBitsPerSecond: 16_000_000 };
+  if(type) opts.mimeType = type;
+  try { recorder = new MediaRecorder(stream, opts); }
+  catch(_){ recorder = new MediaRecorder(stream); }
+  recChunks = [];
+  recorder.ondataavailable = e => { if(e.data && e.data.size) recChunks.push(e.data); };
+  recorder.onstop = () => {
+    const mime = recorder.mimeType || type || "video/webm";
+    const ext = mime.includes("mp4") ? "mp4" : "webm";
+    const blob = new Blob(recChunks, { type: mime.split(";")[0] });
+    stream.getTracks().forEach(t => t.stop());
+    recorder = null; recChunks = [];
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `mood-topography-3d-${recStamp()}.${ext}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    syncRecBtn();
+  };
+  recorder.start(1000);              // a chunk a second, so a long take never sits in one buffer
+  recStart = performance.now();
+  invalidate();
+  syncRecBtn();
+}
+function stopRecording(){
+  if(recorder && recorder.state !== "inactive") recorder.stop();
+}
+function toggleRecording(){ recorder ? stopRecording() : startRecording(); }
+const REC_ICON  = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5.5" fill="currentColor"/></svg>';
+const STOP_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" fill="currentColor"/></svg>';
+function syncRecBtn(){
+  const b = document.getElementById("recBtn");
+  if(!b) return;
+  const on = !!recorder;
+  clearInterval(recTimer); recTimer = null;
+  b.classList.toggle("rec", on);
+  const label = on ? "Stop recording (R)" : "Record video (R)";
+  b.title = label; b.setAttribute("aria-label", label);
+  b.setAttribute("aria-pressed", on ? "true" : "false");
+  if(!on){ b.innerHTML = REC_ICON; return; }
+  const paint = () => {
+    const s = Math.floor((performance.now() - recStart) / 1000);
+    b.innerHTML = STOP_ICON + `<span class="rec-time">${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}</span>`;
+  };
+  paint(); recTimer = setInterval(paint, 500);
+}
 
 /* ---- The current path -----------------------------------------------------
    Says what is on screen this second: one journey while the playlist runs, or
@@ -1327,10 +1410,13 @@ function syncAnimButtons(){
 const pathsIconOn  = Icons.eyeOn;
 const pathsIconOff = Icons.eyeOff;
 corners.innerHTML =
+  `<button class="corner-btn icon-only rec-btn" id="recBtn" title="Record video (R)" aria-label="Record video (R)" aria-pressed="false"></button>` +
   `<button class="corner-btn icon-only" id="pathsBtn" title="Hide paths" aria-label="Hide paths">${pathsIconOn}</button>` +
   `<button class="corner-btn icon-only" id="fullBtn"  title="Fullscreen" aria-label="Fullscreen">${Icons.fullscreen}</button>` +
   `<button class="corner-btn icon-only" id="themeBtn" title="Toggle theme">${Icons.theme}</button>`;
 const pathsBtn  = document.getElementById("pathsBtn");
+document.getElementById("recBtn").onclick = toggleRecording;
+syncRecBtn();
 // Cinema now lives in the control panel, where people will actually find it.
 const cinemaBtn = document.getElementById("cinemaBtn");
 document.getElementById("cinemaIco").innerHTML = Icons.cinema;
@@ -1381,7 +1467,7 @@ function paintKeys(){
   document.getElementById("keysLine").innerHTML = touch
     ? `<b>drag</b> rotate · <b>two fingers</b> pan · <b>pinch</b> zoom · <b>double tap</b> reset`
     : `<b>drag</b> rotate · <b>middle-drag</b> pan · <b>wheel</b> zoom · ` +
-      `<b>double click</b> reset · <b>Space</b> auto-rotate · <b>P</b> screenshot`;
+      `<b>double click</b> reset · <b>Space</b> auto-rotate · <b>P</b> screenshot · <b>R</b> record`;
 }
 paintKeys();
 addEventListener("resize", paintKeys);
