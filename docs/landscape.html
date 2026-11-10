@@ -87,9 +87,6 @@
   /* Record. Only the canvas is captured, so this HUD never ends up in the film. */
   .corner-btns .rec-btn.rec{width:auto;padding:7px 9px;color:#e5484d;box-shadow:inset 0 0 0 1px #e5484d}
   .rec-btn .rec-time{font-variant-numeric:tabular-nums}
-  /* While filming, the path card is painted into the canvas itself (so it is in
-     the video); the DOM copy is hidden so it is not drawn twice on screen. */
-  .is-recording #pathCard{visibility:hidden}
   .rec-btn.rec svg{animation:recblink 1s steps(2,start) infinite}
   @keyframes recblink{to{visibility:hidden}}
 
@@ -930,7 +927,6 @@ function renderTick(dt){
   }
 
   updatePathCard(shown);
-  if(rec) drawRecOverlay();
 }
 requestAnimationFrame(frame);
 
@@ -1077,8 +1073,8 @@ addEventListener("keydown", e => {
    smooth on any machine, and may run a little slower (or faster) than real
    time while it is being made. The button counts the film's own length.
 
-   What is in the film: the canvas, plus the current-path card (start → end
-   station), painted into the frame. Nothing else of the HUD.
+   What is in the film: the canvas only — the landscape and the flight. None of
+   the HUD (title, path card, controls) is filmed.
 
    Browsers without WebCodecs (older Safari, Firefox) fall back to filming the
    canvas in real time with MediaRecorder, which can stutter under load. */
@@ -1099,41 +1095,7 @@ function downloadBlob(blob, ext){
 }
 function endTake(){
   rec = null;
-  document.documentElement.classList.remove("is-recording");
   resize(); invalidate(); syncRecBtn();
-}
-
-/* The path card, painted into the canvas in the same place and style as the
-   DOM card, so it is in the film. Read straight off the live DOM each frame,
-   so it always matches whatever the card says right now. */
-function drawRecOverlay(){
-  const card = document.getElementById("pathCard");
-  if(card.classList.contains("static")) return;          // "All paths": nothing to show
-  const cr = card.getBoundingClientRect();
-  if(!cr.width) return;
-  const rs = getComputedStyle(document.documentElement);
-  ctx.save();
-  ctx.fillStyle = rs.getPropertyValue("--panel").trim() || "rgba(0,0,0,.6)";
-  ctx.fillRect(cr.left, cr.top, cr.width, cr.height);
-  ctx.strokeStyle = rs.getPropertyValue("--hair").trim() || "rgba(255,255,255,.15)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(cr.left + .5, cr.top + .5, cr.width - 1, cr.height - 1);
-  const th = document.getElementById("pathThumb");
-  const tr = th.getBoundingClientRect();
-  if(tr.width && th.width) ctx.drawImage(th, tr.left, tr.top, tr.width, tr.height);
-  for(const el of [document.getElementById("pathCardTitle"), document.getElementById("pathCardSub")]){
-    const er = el.getBoundingClientRect(), cs = getComputedStyle(el);
-    if(!er.width) continue;
-    ctx.save();
-    ctx.beginPath(); ctx.rect(er.left, er.top - 2, er.width, er.height + 4); ctx.clip();
-    ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    if("letterSpacing" in ctx) ctx.letterSpacing = cs.letterSpacing === "normal" ? "0px" : cs.letterSpacing;
-    ctx.fillStyle = cs.color; ctx.textBaseline = "middle"; ctx.textAlign = "left";
-    const t = cs.textTransform === "uppercase" ? el.textContent.toUpperCase() : el.textContent;
-    ctx.fillText(t, er.left, er.top + er.height / 2);
-    ctx.restore();
-  }
-  ctx.restore();
 }
 
 // ---- Frame-by-frame take (WebCodecs + mp4-muxer) ----
@@ -1166,12 +1128,11 @@ async function startFrameTake(){
   });
   encoder.configure(config);
   rec = take;
-  document.documentElement.classList.add("is-recording");
   syncRecBtn();
 
   const step = 1 / REC_FPS, usPerFrame = 1e6 / REC_FPS;
   while(!take.stop && !take.error){
-    renderTick(step);                                  // world + path card, painted
+    renderTick(step);                                  // step the world and paint it
     const f = new VideoFrame(cv, { timestamp: Math.round(take.n * usPerFrame),
       duration: Math.round(usPerFrame), visibleRect: { x:0, y:0, width:w, height:h } });
     encoder.encode(f, { keyFrame: take.n % (REC_FPS * 2) === 0 });
@@ -1219,7 +1180,6 @@ function startLiveTake(){
     endTake();
   };
   rec = { kind:"live", mr, start: performance.now() };
-  document.documentElement.classList.add("is-recording");
   mr.start(1000);
   invalidate(); syncRecBtn();
 }

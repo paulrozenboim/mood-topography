@@ -414,7 +414,7 @@ its exact timestamp, muxed to MP4 by `assets/vendor/mp4-muxer.js` (MIT). A slow 
 takes longer to make but can never stutter, so takes are smooth on any machine and may
 run slower than real time while recording; the button counts the film's own length. The
 canvas size is frozen for the take (H.264 needs even sizes, so the canvas always is).
-The current-path card is painted into each frame; the rest of the HUD is not filmed.
+Only the canvas is filmed; none of the HUD (title, path card, controls) is in the video.
 Browsers without WebCodecs fall back to real-time MediaRecorder.
 
 The top-left card names what is on screen — one journey while the playlist runs, the
